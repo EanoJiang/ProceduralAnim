@@ -26,6 +26,11 @@
 			"Name": "LanguageOne",
 			"Enabled": true,
 			"MarketplaceURL": "com.epicgames.launcher://ue/Fab/product/40d7e62e-07c6-4690-8bef-bb3bf89b8065"
+		},
+		{
+			"Name": "CrystalNodes",
+			"Enabled": true,
+			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/795d430fe08640bcb9f3f52c996a62a0"
 		}
 	]
 }
