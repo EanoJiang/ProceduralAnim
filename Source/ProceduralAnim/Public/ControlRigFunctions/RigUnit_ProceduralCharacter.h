@@ -18,6 +18,7 @@ struct PROCEDURALANIM_API FRigUnit_SetupFootArray : public FRigUnit_DynamicHiera
 	UPROPERTY(meta=(Input,Output))
 	TArray<FRigElementKey> FootArray;
 
+
 	UPROPERTY()
 	FName RootName = TEXT("root");
 	
@@ -26,6 +27,12 @@ struct PROCEDURALANIM_API FRigUnit_SetupFootArray : public FRigUnit_DynamicHiera
 
 	UPROPERTY(meta = (Input))
 	FString ExcludeNameContains = TEXT("ik");
+	
+	UPROPERTY(meta=(Input,Output))
+	TArray<FTransform> LockedFootLocationArray;
+
+	UPROPERTY(meta=(Input,Output))
+	TArray<bool> IsFootLockedArray;
 };
 
 //Pelvis偏移
@@ -65,3 +72,16 @@ struct PROCEDURALANIM_API FRigUnit_GetFinalLegIKAxisData : public FRigUnit
 	UPROPERTY(meta = (Output))
 	FVector SecondaryAxis = FVector(0, 1, 0);
 };
+
+
+//手动封装的用于Transform的Lerp函数
+static FTransform InterpolateTransform(const FTransform& A, const FTransform& B, float Alpha)
+{
+	FVector InterpLocation = FMath::Lerp(A.GetLocation(), B.GetLocation(), Alpha);
+	FQuat InterpRotation = FQuat::Slerp(A.GetRotation(), B.GetRotation(), Alpha);
+	FVector InterpScale = FMath::Lerp(A.GetScale3D(), B.GetScale3D(), Alpha);
+ 
+	return FTransform(InterpRotation, InterpLocation, InterpScale);
+}
+
+

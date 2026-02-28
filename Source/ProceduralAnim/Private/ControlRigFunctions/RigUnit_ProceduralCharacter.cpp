@@ -3,6 +3,7 @@
 #include "Units/RigUnitContext.h"
 #include "RigVMCore/RigVMDrawInterface.h"
 #include "ControlRig/Public/Rigs/RigHierarchy.h"
+#include "Transform/TransformableHandleUtils.h"
 
 FRigUnit_SetupFootArray_Execute()
 {
@@ -15,7 +16,9 @@ FRigUnit_SetupFootArray_Execute()
 		return;
 	}
 	
-	FootArray.Reset(); 
+	FootArray.Reset();
+	LockedFootLocationArray.Reset();
+	IsFootLockedArray.Reset();
 
 	const FRigElementKey RootBoneKey(RootName, ERigElementType::Bone);
 	if (!Hierarchy->Contains(RootBoneKey))
@@ -34,6 +37,14 @@ FRigUnit_SetupFootArray_Execute()
 		if (BoneNameStr.Contains(IncludeNameContains, ESearchCase::IgnoreCase) && !BoneNameStr.Contains(ExcludeNameContains, ESearchCase::IgnoreCase))
 		{
 			FootArray.Add(ChildKey);
+			
+			FVector LockedFootLocationElementTranslation = Hierarchy->GetGlobalTransform(ChildKey).GetTranslation() + FVector(0.0f, 0.0f, -13.5f);
+			FTransform LockedFootLocationElement;
+			LockedFootLocationElement.SetTranslation(LockedFootLocationElementTranslation);
+			LockedFootLocationArray.Add(LockedFootLocationElement);
+
+			IsFootLockedArray.Add(false);
+			
 		}
 		
 	}
@@ -57,7 +68,7 @@ FRigUnit_OffsetPelvis_Execute()
 	// ZOffset = FMath::Sin(AccumulatedTime * Speed) * Amplitude;
 
 	// 应用位置偏移到PelvisTransform
-	PelvisTransform.SetTranslation(PelvisTransform.GetTranslation() + FVector(0,0,ZOffset));
+	PelvisTransform.AddToTranslation(FVector(0,0,ZOffset));
 
 	// 设置回骨骼
 	Hierarchy->SetGlobalTransform(Item, PelvisTransform);
@@ -71,3 +82,5 @@ FRigUnit_GetFinalLegIKAxisData_Execute()
 	PrimaryAxis = FVector(-1, 0, 0) * Sign;
 	SecondaryAxis = FVector(0, 1, 0) * Sign;
 }
+
+
