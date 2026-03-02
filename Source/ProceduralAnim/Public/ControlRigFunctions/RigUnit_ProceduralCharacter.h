@@ -33,6 +33,12 @@ struct PROCEDURALANIM_API FRigUnit_SetupFootArray : public FRigUnit_DynamicHiera
 
 	UPROPERTY(meta=(Input,Output))
 	TArray<bool> IsFootLockedArray;
+
+	UPROPERTY(meta=(Input,Output))
+	TArray<FTransform> PredictFeetLocationArray;
+
+	UPROPERTY(meta=(Input,Output))
+	TArray<float> PerFootCyclePercentArray;
 };
 
 //Pelvis偏移

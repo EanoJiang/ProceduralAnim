@@ -44,7 +44,10 @@ FRigUnit_SetupFootArray_Execute()
 			LockedFootLocationArray.Add(LockedFootLocationElement);
 
 			IsFootLockedArray.Add(false);
+
+			PredictFeetLocationArray.Add(FTransform());
 			
+			PerFootCyclePercentArray.Add(0);
 		}
 		
 	}
