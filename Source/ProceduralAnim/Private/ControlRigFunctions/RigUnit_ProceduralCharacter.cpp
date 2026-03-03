@@ -19,6 +19,8 @@ FRigUnit_SetupFootArray_Execute()
 	FootArray.Reset();
 	LockedFootLocationArray.Reset();
 	IsFootLockedArray.Reset();
+	PredictFeetLocationArray.Reset();
+	PerFootCyclePercentArray.Reset();
 
 	const FRigElementKey RootBoneKey(RootName, ERigElementType::Bone);
 	if (!Hierarchy->Contains(RootBoneKey))
