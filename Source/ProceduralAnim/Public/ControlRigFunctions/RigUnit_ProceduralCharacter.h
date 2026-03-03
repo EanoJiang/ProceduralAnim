@@ -49,16 +49,17 @@ struct PROCEDURALANIM_API FRigUnit_OffsetPelvis : public FRigUnit_DynamicHierarc
 	
 	RIGVM_METHOD()
 	virtual void Execute() override;
-	
-	UPROPERTY(Transient)
-	ERigElementType PelvisType = ERigElementType::Bone;
-	
-	UPROPERTY(Transient)
-	FName PelvisName = TEXT("pelvis");
 
 	//Z轴偏移量
 	UPROPERTY(meta = (Input))
 	float ZOffset = -30.0f;
+
+	UPROPERTY(meta = (Input))
+	TArray<FRigElementKey> FootArray;
+
+	//OffsetPelvis前的脚部位置数组
+	UPROPERTY(Transient)
+	TArray<FTransform> OriginalFootLocationArray;
 	
 };
 

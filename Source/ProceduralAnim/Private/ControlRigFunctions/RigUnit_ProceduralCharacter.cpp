@@ -65,18 +65,27 @@ FRigUnit_OffsetPelvis_Execute()
 	{
 		return;
 	}
-	
-	FRigElementKey Item = FRigElementKey(PelvisName, PelvisType);
-	FTransform PelvisTransform = Hierarchy->GetGlobalTransform(Item);
-	// // Z轴偏移：Sin(Time * Speed) * Amplitude
-	// AccumulatedTime += ExecuteContext.GetDeltaTime();
-	// ZOffset = FMath::Sin(AccumulatedTime * Speed) * Amplitude;
 
+	/*保存OffsetPelvis之前的脚部Transform*/
+	OriginalFootLocationArray.Reset();
+	for (const FRigElementKey& FootRig : FootArray)
+	{
+		OriginalFootLocationArray.Add(Hierarchy->GetGlobalTransform(FootRig));
+	}
+	
+	/*Pelvis偏移*/
+	FRigElementKey PelvisRig = FRigElementKey(TEXT("pelvis"), ERigElementType::Bone);
+	FTransform PelvisTransform = Hierarchy->GetGlobalTransform(PelvisRig);
 	// 应用位置偏移到PelvisTransform
 	PelvisTransform.AddToTranslation(FVector(0,0,ZOffset));
-
 	// 设置回骨骼
-	Hierarchy->SetGlobalTransform(Item, PelvisTransform);
+	Hierarchy->SetGlobalTransform(PelvisRig, PelvisTransform);
+
+	/*恢复脚部Transform*/
+	for (int i = 0; i < FootArray.Num(); i++)
+	{
+		Hierarchy->SetGlobalTransform(FootArray[i], OriginalFootLocationArray[i]);
+	}
 }
 
 
