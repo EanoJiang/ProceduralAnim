@@ -76,6 +76,11 @@ FRigUnit_OffsetPelvis_Execute()
 	/*Pelvis偏移*/
 	FRigElementKey PelvisRig = FRigElementKey(TEXT("pelvis"), ERigElementType::Bone);
 	FTransform PelvisTransform = Hierarchy->GetGlobalTransform(PelvisRig);
+	float ZOffset = FMath::GetMappedRangeValueClamped(
+		FVector2D(100,500),
+		FVector2D(0,5),
+		RigSpaceVelocity.Length()
+		)* sin(2 * PI * 2 * MasterCyclePercent) - 7;
 	// 应用位置偏移到PelvisTransform
 	PelvisTransform.AddToTranslation(FVector(0,0,ZOffset));
 	// 设置回骨骼
@@ -85,6 +90,7 @@ FRigUnit_OffsetPelvis_Execute()
 	for (int i = 0; i < FootArray.Num(); i++)
 	{
 		Hierarchy->SetGlobalTransform(FootArray[i], OriginalFootLocationArray[i]);
+		
 	}
 }
 
