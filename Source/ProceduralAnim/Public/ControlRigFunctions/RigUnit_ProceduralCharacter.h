@@ -17,10 +17,6 @@ struct PROCEDURALANIM_API FRigUnit_SetupFootArray : public FRigUnit_DynamicHiera
 
 	UPROPERTY(meta=(Input,Output))
 	TArray<FRigElementKey> FootArray;
-
-
-	UPROPERTY()
-	FName RootName = TEXT("root");
 	
 	UPROPERTY(meta = (Input))
 	FString IncludeNameContains = TEXT("foot");
@@ -39,6 +35,9 @@ struct PROCEDURALANIM_API FRigUnit_SetupFootArray : public FRigUnit_DynamicHiera
 
 	UPROPERTY(meta=(Input,Output))
 	TArray<float> PerFootCyclePercentArray;
+
+	UPROPERTY(meta=(Input,Output))
+	TArray<FTransform> SavedFootPlatformArray;
 };
 
 //Pelvis偏移
@@ -93,4 +92,27 @@ static FTransform InterpolateTransform(const FTransform& A, const FTransform& B,
 	return FTransform(InterpRotation, InterpLocation, InterpScale);
 }
 
+#pragma region 计算脚部的目标朝向
+	//计算脚部的目标朝向
+	USTRUCT(meta = (DisplayName = "GetFootTargetAngle"))
+	struct PROCEDURALANIM_API FRigUnit_GetFootTargetAngle : public FRigUnit
+	{
+		GENERATED_BODY()
+
+		RIGVM_METHOD()
+		virtual void Execute() override;
+
+		UPROPERTY(meta = (Input))
+		FVector RigSpaceVelocity;
+		
+		UPROPERTY(meta = (Output))
+		float FootTargetZAngle;
+
+	};
+
+	FVector EulerFromQuat(const FQuat& Rotation, EEulerRotationOrder RotationOrder = EEulerRotationOrder::ZYX, bool bUseUEHandyness = false);
+
+	FQuat FromTwoVectors(const FVector& A, const FVector& B);
+
+#pragma endregion
 

@@ -15,7 +15,8 @@ public class ProceduralAnim : ModuleRules
 			"Engine", 
 			"InputCore",
 			"RigVM",
-			"ControlRig"
+			"ControlRig",
+			"AnimationCore"
 		});
 
 		// Uncomment if you are using Slate UI

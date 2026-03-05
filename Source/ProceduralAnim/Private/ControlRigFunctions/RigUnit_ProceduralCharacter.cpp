@@ -1,9 +1,8 @@
 #include "ControlRigFunctions/RigUnit_ProceduralCharacter.h"
 #include "CoreMinimal.h"
-#include "Units/RigUnitContext.h"
-#include "RigVMCore/RigVMDrawInterface.h"
 #include "ControlRig/Public/Rigs/RigHierarchy.h"
-#include "Transform/TransformableHandleUtils.h"
+#include "AnimationCoreLibrary.h"
+#include "RigVMFunctions/Math/RigVMMathLibrary.h"
 
 FRigUnit_SetupFootArray_Execute()
 {
@@ -21,8 +20,9 @@ FRigUnit_SetupFootArray_Execute()
 	IsFootLockedArray.Reset();
 	PredictFeetLocationArray.Reset();
 	PerFootCyclePercentArray.Reset();
+	SavedFootPlatformArray.Reset();
 
-	const FRigElementKey RootBoneKey(RootName, ERigElementType::Bone);
+	const FRigElementKey RootBoneKey(TEXT("root"), ERigElementType::Bone);
 	if (!Hierarchy->Contains(RootBoneKey))
 	{
 		return;
@@ -50,6 +50,8 @@ FRigUnit_SetupFootArray_Execute()
 			PredictFeetLocationArray.Add(FTransform());
 			
 			PerFootCyclePercentArray.Add(0);
+
+			SavedFootPlatformArray.Add(FTransform());
 		}
 		
 	}
@@ -102,5 +104,39 @@ FRigUnit_GetFinalLegIKAxisData_Execute()
 	PrimaryAxis = FVector(-1, 0, 0) * Sign;
 	SecondaryAxis = FVector(0, 1, 0) * Sign;
 }
+
+
+
+#pragma region 计算脚部的目标朝向
+	FRigUnit_GetFootTargetAngle_Execute()
+	{
+		const float OriginalZAngle = AnimationCore::EulerFromQuat(
+			FromTwoVectors(FVector(0,1,0),RigSpaceVelocity)
+			).Z;
+		if (OriginalZAngle > 100)
+		{
+			FootTargetZAngle = OriginalZAngle - 180;
+		}
+		else if (OriginalZAngle < -100)
+		{
+			FootTargetZAngle = OriginalZAngle + 180;
+		}
+		else
+		{
+			FootTargetZAngle = OriginalZAngle;
+		}
+	}
+
+	FQuat FromTwoVectors(const FVector& A, const FVector& B)
+	{
+		if (A.IsNearlyZero() || B.IsNearlyZero())
+		{
+			return FQuat::Identity;
+		}
+		return FRigVMMathLibrary::FindQuatBetweenVectors(A, B);
+	}
+#pragma endregion
+
+
 
 
