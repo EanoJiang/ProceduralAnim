@@ -589,7 +589,9 @@ SpineRotation = PelvisRotation × -2
 
 ![1772680758792](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260305232643928-1789930536.gif)
 
-### 将脚踩平台的Transform存为数组以供随时访问
+### 斜向移动时骨骼朝向偏移
+
+#### 将脚踩平台的Transform存为数组以供随时访问
 
 在SetupFootArray中初始化后，再存储该数组
 
@@ -599,7 +601,7 @@ SpineRotation = PelvisRotation × -2
 
 ![1772695548617](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260305232645276-1303488832.png)
 
-### 斜向移动时左右脚的朝向偏移
+#### 斜向移动时左右脚的朝向偏移
 
 对于靶向移动来说，在同一条对角线上的两个方向移动时的脚朝向是相同的，因此只需要考虑角色面前的180度半圆内的脚朝向
 
@@ -615,6 +617,10 @@ SpineRotation = PelvisRotation × -2
 
 ![1772703106545](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260305232646481-357227241.png)
 
+得到的FootTargetZAngle转换为Quat，得到移动角度偏移MovementAngleOffset
+
+![1772765702434](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260306173952685-801369888.png)
+
 逻辑代码迁移到C++自定义ControlRig节点：
 
 需要.Build中添加编译要用到的模块AnimationCore
@@ -624,10 +630,10 @@ SpineRotation = PelvisRotation × -2
 RigUnit_ProceduralCharacter.h
 
 ```cpp
-#pragma region 计算脚部的目标朝向
-	//计算脚部的目标朝向
-	USTRUCT(meta = (DisplayName = "GetFootTargetAngle"))
-	struct PROCEDURALANIM_API FRigUnit_GetFootTargetAngle : public FRigUnit
+#pragma region 计算移动角度偏移
+	//计算移动角度偏移
+	USTRUCT(meta = (DisplayName = "GetMovementAngleOffset"))
+	struct PROCEDURALANIM_API FRigUnit_GetMovementAngleOffset : public FRigUnit
 	{
 		GENERATED_BODY()
 
@@ -636,10 +642,12 @@ RigUnit_ProceduralCharacter.h
 
 		UPROPERTY(meta = (Input))
 		FVector RigSpaceVelocity;
-	
+
 		UPROPERTY(meta = (Output))
 		float FootTargetZAngle;
 
+		UPROPERTY(meta = (Output))
+		FQuat MovementAngleOffset;
 	};
 
 	FVector EulerFromQuat(const FQuat& Rotation, EEulerRotationOrder RotationOrder = EEulerRotationOrder::ZYX, bool bUseUEHandyness = false);
@@ -652,8 +660,8 @@ RigUnit_ProceduralCharacter.h
 RigUnit_ProceduralCharacter.cpp
 
 ```cpp
-#pragma region 计算脚部的目标朝向
-	FRigUnit_GetFootTargetAngle_Execute()
+#pragma region 计算移动角度偏移
+	FRigUnit_GetMovementAngleOffset_Execute()
 	{
 		const float OriginalZAngle = AnimationCore::EulerFromQuat(
 			FromTwoVectors(FVector(0,1,0),RigSpaceVelocity)
@@ -670,6 +678,7 @@ RigUnit_ProceduralCharacter.cpp
 		{
 			FootTargetZAngle = OriginalZAngle;
 		}
+		MovementAngleOffset = AnimationCore::QuatFromEuler(FVector(0,0,FootTargetZAngle));
 	}
 
 	FQuat FromTwoVectors(const FVector& A, const FVector& B)
@@ -681,6 +690,49 @@ RigUnit_ProceduralCharacter.cpp
 		return FRigVMMathLibrary::FindQuatBetweenVectors(A, B);
 	}
 #pragma endregion
+
 ```
 
-![1772703209005](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260305232647459-86592147.png)
+![1772766089385](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260306173953430-2030078327.png)
+
+在PredictFootLandingSpot中传入移动角度偏移
+
+![1772767143284](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260306173954051-521816941.png)
+
+效果：
+
+![1772768332916](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260306173958885-473144745.gif)
+
+#### 在FinalLegIK中传递移动角度偏移到膝盖
+
+![1772779918985](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260306173959842-1944296981.png)
+
+效果：
+
+![1772780260626](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260306174005060-62762318.gif)
+
+### 身体跟随脚部的旋转而自旋转
+
+上面解决了脚部旋转以及膝盖的跟随旋转，但是Pelvis还没有跟着旋转，因此需要找到双脚间的平均旋转偏移来附加到Pelvis上
+
+![1772788823676](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260306174005988-499352574.png)
+
+![1772786694356](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260306174006779-766120383.png)
+
+### 预测脚步落点位置需要绕着身体旋转
+
+![1772789901280](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260306174007338-1529557124.png)
+
+效果：
+
+八向移动
+
+![1772790080868](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260306174533162-2087098154.gif)
+
+斜向移动
+
+![1772790290564](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260306174539631-498234878.gif)
+
+## Smoothing and rotation limits
+
+> 转向限制，尽可能避免出现腿部交叉的情况

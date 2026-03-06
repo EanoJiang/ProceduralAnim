@@ -92,10 +92,10 @@ static FTransform InterpolateTransform(const FTransform& A, const FTransform& B,
 	return FTransform(InterpRotation, InterpLocation, InterpScale);
 }
 
-#pragma region 计算脚部的目标朝向
-	//计算脚部的目标朝向
-	USTRUCT(meta = (DisplayName = "GetFootTargetAngle"))
-	struct PROCEDURALANIM_API FRigUnit_GetFootTargetAngle : public FRigUnit
+#pragma region 计算移动角度偏移
+	//计算移动角度偏移
+	USTRUCT(meta = (DisplayName = "GetMovementAngleOffset"))
+	struct PROCEDURALANIM_API FRigUnit_GetMovementAngleOffset : public FRigUnit
 	{
 		GENERATED_BODY()
 
@@ -108,6 +108,8 @@ static FTransform InterpolateTransform(const FTransform& A, const FTransform& B,
 		UPROPERTY(meta = (Output))
 		float FootTargetZAngle;
 
+		UPROPERTY(meta = (Output))
+		FQuat MovementAngleOffset;
 	};
 
 	FVector EulerFromQuat(const FQuat& Rotation, EEulerRotationOrder RotationOrder = EEulerRotationOrder::ZYX, bool bUseUEHandyness = false);

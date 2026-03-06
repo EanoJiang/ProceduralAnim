@@ -107,8 +107,8 @@ FRigUnit_GetFinalLegIKAxisData_Execute()
 
 
 
-#pragma region 计算脚部的目标朝向
-	FRigUnit_GetFootTargetAngle_Execute()
+#pragma region 计算移动角度偏移
+	FRigUnit_GetMovementAngleOffset_Execute()
 	{
 		const float OriginalZAngle = AnimationCore::EulerFromQuat(
 			FromTwoVectors(FVector(0,1,0),RigSpaceVelocity)
@@ -125,6 +125,7 @@ FRigUnit_GetFinalLegIKAxisData_Execute()
 		{
 			FootTargetZAngle = OriginalZAngle;
 		}
+		MovementAngleOffset = AnimationCore::QuatFromEuler(FVector(0,0,FootTargetZAngle));
 	}
 
 	FQuat FromTwoVectors(const FVector& A, const FVector& B)
