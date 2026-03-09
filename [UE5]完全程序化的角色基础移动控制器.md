@@ -744,3 +744,233 @@ RigUnit_ProceduralCharacter.cpp
 ### 让更新前后的向量平滑过渡(不受帧速率影响)
 
 > 之前的向量更新是瞬时的，因此会出现腿部位置突变的情况，极其破坏动作的说服力
+
+#### 新建用于向量的Lerp函数(消除帧率差异)
+
+LerpedVector = InVector + 差值 * 基于DeltaTime的变化量
+
+![1773026607721](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260309180029582-1861564373.png)
+
+迁移到C++
+
+```cpp
+#pragma region 消除帧率差异的用于Vector的Lerp函数
+	USTRUCT(meta = (DisplayName = "VectorLerp"), Category = "Lerp")
+	struct PROCEDURALANIM_API FRigUnit_VectorLerpIndependentOnFrameRate : public FRigUnit
+	{
+		GENERATED_BODY()
+
+		FRigUnit_VectorLerpIndependentOnFrameRate()
+		{
+			LerpedVector = TargetVector = InVector = FVector(1.f, 0.f, 0.f);
+			MaxDelVectorPerSecond = 0.f;
+		}
+		RIGVM_METHOD()
+		virtual void Execute() override;
+
+		UPROPERTY(meta = (Input))
+		FVector InVector;
+
+		UPROPERTY(meta = (Input))
+		FVector TargetVector;
+
+		UPROPERTY(meta = (Input))
+		float MaxDelVectorPerSecond = 0;
+
+		UPROPERTY(meta = (Output))
+		FVector LerpedVector;
+	};
+
+FVector MathVectorClampLength(FVector Value = FVector(1.f, 0.f, 0.f), float MinimumLength = 0, float MaximumLength = 1);
+#pragma endregion
+```
+
+```cpp
+#pragma region 消除帧率差异的用于Vector的Lerp函数
+FRigUnit_VectorLerpIndependentOnFrameRate_Execute()
+{
+	FVector DeltaVector = MathVectorClampLength(TargetVector - InVector, 0,MaxDelVectorPerSecond * ExecuteContext.GetDeltaTime<float>());
+	LerpedVector = InVector + DeltaVector;
+}
+
+FVector MathVectorClampLength(FVector Value, float MinimumLength, float MaximumLength)
+{
+	if (Value.IsNearlyZero())
+	{
+		return FVector::ZeroVector;
+	}
+	float Length = static_cast<float>(Value.Size());
+	return Value * FMath::Clamp<float>(Length, MinimumLength, MaximumLength) / Length;
+}
+#pragma endregion
+```
+
+RigSpaceVelocity加入自定义的VectorLerp节点
+
+![1773027985876](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260309180032144-386160337.png)
+
+#### 修复：预测脚部落点位置更新不及时的Bug
+
+> 当阻尼值设置较小时会出现，停下后脚部落点位置更新不及时
+>
+> ![1773028171213](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260309180045607-1578889088.gif)
+>
+> 这是因为停下的瞬间RigSpaceVelocity已经为0，这时候的移动方向是未知方向，因此移动方向上的步幅会出问题
+>
+> 因此还需要修改预测脚部落点位置的函数逻辑
+
+移动方向上的步幅中，步幅原来的逻辑是RigSpaceVelocity的单位向量 × 步长的一半，因为归一化节点unit对于零向量会出问题，因此改为RigSpaceVelocity×在地面停留时间的一半
+
+![1773032574271](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260309180357642-454482477.png)
+
+#### 移动角度偏移MovementAngleOffset加入自定义的VectorLerp节点
+
+考虑到之前把移动角度偏移MovementAngleOffset的逻辑也封装到了C++中，那么要想在C++中也调用这个自定义的VecotrLerp节点，需要把该节点的功能再封装一层为独立的函数
+
+```cpp
+#pragma region 消除帧率差异的用于Vector的Lerp函数
+	USTRUCT(meta = (DisplayName = "VectorLerp"), Category = "Lerp")
+	struct PROCEDURALANIM_API FRigUnit_VectorLerpIndependentOnFrameRate : public FRigUnit
+	{
+		GENERATED_BODY()
+
+		FRigUnit_VectorLerpIndependentOnFrameRate()
+		{
+			LerpedVector = TargetVector = InVector = FVector(1.f, 0.f, 0.f);
+			MaxDelVectorPerSecond = 0.f;
+		}
+		RIGVM_METHOD()
+		virtual void Execute() override;
+
+		UPROPERTY(meta = (Input))
+		FVector InVector;
+
+		UPROPERTY(meta = (Input))
+		FVector TargetVector;
+
+		UPROPERTY(meta = (Input))
+		float MaxDelVectorPerSecond = 0;
+
+		UPROPERTY(meta = (Output))
+		FVector LerpedVector;
+	};
+
+	FVector VectorLerpIndependentOnFrameRate(FVector InVector, FVector TargetVector, float MaxDelVectorPerSecond = 0, float DeltaTime = 0);
+
+	FVector MathVectorClampLength(FVector Value = FVector(1.f, 0.f, 0.f), float MinimumLength = 0, float MaximumLength = 1);
+#pragma endregion
+```
+
+```cpp
+#pragma region 消除帧率差异的用于Vector的Lerp函数
+FRigUnit_VectorLerpIndependentOnFrameRate_Execute()
+{
+	float DeltaTime = ExecuteContext.GetDeltaTime<float>();
+	LerpedVector = VectorLerpIndependentOnFrameRate(InVector, TargetVector, MaxDelVectorPerSecond, DeltaTime);
+}
+
+FVector VectorLerpIndependentOnFrameRate(FVector InVector, FVector TargetVector, float MaxDelVectorPerSecond, float DeltaTime)
+{
+	FVector DeltaVector = MathVectorClampLength(TargetVector - InVector, 0,MaxDelVectorPerSecond * DeltaTime);
+	return InVector + DeltaVector;
+}
+
+FVector MathVectorClampLength(FVector Value, float MinimumLength, float MaximumLength)
+{
+	if (Value.IsNearlyZero())
+	{
+		return FVector::ZeroVector;
+	}
+	float Length = static_cast<float>(Value.Size());
+	return Value * FMath::Clamp<float>(Length, MinimumLength, MaximumLength) / Length;
+}
+#pragma endregion
+```
+
+加入自定义的VectorLerp节点
+
+![1773034466179](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260309180358402-202197218.png)
+
+迁移到C++：
+
+```cpp
+		UPROPERTY(meta = (Input))
+		float MaxDelVectorPerSecond = 360.0f;
+```
+
+![1773035661355](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260309180110739-688213998.png)
+
+```cpp
+		FVector LerpedVector = VectorLerpIndependentOnFrameRate(
+			AnimationCore::EulerFromQuat(MovementAngleOffset),
+			FVector(0,0,FootTargetZAngle),
+			MaxDelVectorPerSecond,
+			ExecuteContext.GetDeltaTime<float>()
+			);
+
+		MovementAngleOffset = AnimationCore::QuatFromEuler(FVector(0,0,LerpedVector.Z));
+```
+
+![1773035703037](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260309180114569-1355151275.png)
+
+![1773035609623](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260309180359574-25394959.png)
+
+暂时把每秒的最大变换量设置为360，在这里也就是1圈
+
+效果：
+
+![1773036272151](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260309180402966-1314681567.gif)
+
+> 突然改变移动方向不会出现盆骨Rotation突变的情况
+
+#### 修复：侧向移动时脚部是平移过去的，没有正确旋转
+
+> 正确次序是：绕脚掌ball旋转->绕脚尖tip旋转->绕脚后跟旋转->绕脚踩处旋转
+
+原来的逻辑：
+
+![1773037347045](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260309180403770-603951408.png)
+
+![1773037443379](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260309180407391-1644290511.gif)
+
+修改后：
+
+![1773037161646](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260309180408171-906638952.png)
+
+![1773037310392](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260309180234469-1970409750.gif)
+
+#### 限制脚部的旋转偏移
+
+脚部的Z轴旋转(左右旋转)受移动角度偏移限制，限制权重为0.5
+
+![1773043107974](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260309180236320-2128186786.png)
+
+限制在(-25,25)度
+
+![1773042936582](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260309180237368-1466338623.png)
+
+将之前预测落点函数中的移动角度偏移权重也更换为这个变量
+
+![1773043047250](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260309180238083-2043655884.png)
+
+#### 修复：当脚部经过身体正下方会处于很平的浮空
+
+让脚部在完成Swing阶段后保持最初始的旋转信息
+
+怎么判断已完成Swing阶段？
+
+每只脚的Cycle实时百分比 / Swing阶段占比 < 1，说明当前处于Swing阶段
+
+并且用曲线来平滑处理，中点就是Swing阶段时脚部经过身体正下方的时刻，权重为1，完全是最初始的旋转信息
+
+![1773049567322](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260309180238823-1814572723.png)
+
+效果：
+
+![1773049054575](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260309180241866-1221455551.gif)
+
+#### 修复：出现腿部交叉的情况
+
+> 对比现实中，如果腿部即将交叉，我们会让一条腿绕着另一条腿向前或向后旋转
+
+怎么实现"一条腿绕着另一条腿旋转"？

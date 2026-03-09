@@ -2,6 +2,8 @@
 #include "CoreMinimal.h"
 #include "ControlRig/Public/Rigs/RigHierarchy.h"
 #include "AnimationCoreLibrary.h"
+#include "RigVMFunctions/Animation/RigVMFunction_GetDeltaTime.h"
+#include "RigVMFunctions/Math/RigVMFunction_MathVector.h"
 #include "RigVMFunctions/Math/RigVMMathLibrary.h"
 
 FRigUnit_SetupFootArray_Execute()
@@ -61,7 +63,7 @@ FRigUnit_SetupFootArray_Execute()
 FRigUnit_OffsetPelvis_Execute()
 {
 	DECLARE_SCOPE_HIERARCHICAL_COUNTER_RIGUNIT()
-
+	
 	URigHierarchy* Hierarchy = ExecuteContext.Hierarchy;
 	if (!Hierarchy)
 	{
@@ -125,7 +127,15 @@ FRigUnit_GetFinalLegIKAxisData_Execute()
 		{
 			FootTargetZAngle = OriginalZAngle;
 		}
-		MovementAngleOffset = AnimationCore::QuatFromEuler(FVector(0,0,FootTargetZAngle));
+	
+		FVector LerpedVector = VectorLerpIndependentOnFrameRate(
+			AnimationCore::EulerFromQuat(MovementAngleOffset),
+			FVector(0,0,FootTargetZAngle),
+			MaxDelVectorLengthPerSecond,
+			ExecuteContext.GetDeltaTime<float>()
+			);
+	
+		MovementAngleOffset = AnimationCore::QuatFromEuler(FVector(0,0,LerpedVector.Z));
 	}
 
 	FQuat FromTwoVectors(const FVector& A, const FVector& B)
@@ -136,6 +146,33 @@ FRigUnit_GetFinalLegIKAxisData_Execute()
 		}
 		return FRigVMMathLibrary::FindQuatBetweenVectors(A, B);
 	}
+#pragma endregion
+
+#pragma region 消除帧率差异的用于Vector的Lerp函数
+FRigUnit_VectorLerpIndependentOnFrameRate_Execute()
+{
+	LerpedVector = VectorLerpIndependentOnFrameRate(
+		InVector,
+		TargetVector,
+		MaxDelVectorLengthPerSecond,
+		ExecuteContext.GetDeltaTime<float>());
+}
+
+FVector VectorLerpIndependentOnFrameRate(FVector InVector, FVector TargetVector, float MaxDelVectorLengthPerSecond, float DeltaTime)
+{
+	FVector DeltaVector = MathVectorClampLength(TargetVector - InVector, 0,MaxDelVectorLengthPerSecond * DeltaTime);
+	return InVector + DeltaVector;
+}
+
+FVector MathVectorClampLength(FVector Value, float MinimumLength, float MaximumLength)
+{
+	if (Value.IsNearlyZero())
+	{
+		return FVector::ZeroVector;
+	}
+	float Length = static_cast<float>(Value.Size());
+	return Value * FMath::Clamp<float>(Length, MinimumLength, MaximumLength) / Length;
+}
 #pragma endregion
 
 

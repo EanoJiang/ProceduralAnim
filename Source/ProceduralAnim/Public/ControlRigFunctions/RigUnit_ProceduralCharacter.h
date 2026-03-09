@@ -65,7 +65,7 @@ struct PROCEDURALANIM_API FRigUnit_OffsetPelvis : public FRigUnit_DynamicHierarc
 };
 
 //计算FinalLegIK的主次轴朝向数据
-USTRUCT(meta = (DisplayName = "GetFinalLegIKAxisData"))
+USTRUCT(meta = (DisplayName = "GetFinalLegIKAxisData"), Category = "FinalLegIK")
 struct PROCEDURALANIM_API FRigUnit_GetFinalLegIKAxisData : public FRigUnit
 {
 	GENERATED_BODY()
@@ -94,7 +94,7 @@ static FTransform InterpolateTransform(const FTransform& A, const FTransform& B,
 
 #pragma region 计算移动角度偏移
 	//计算移动角度偏移
-	USTRUCT(meta = (DisplayName = "GetMovementAngleOffset"))
+	USTRUCT(meta = (DisplayName = "GetMovementAngleOffset"), Category = "Calculate")
 	struct PROCEDURALANIM_API FRigUnit_GetMovementAngleOffset : public FRigUnit
 	{
 		GENERATED_BODY()
@@ -105,16 +105,51 @@ static FTransform InterpolateTransform(const FTransform& A, const FTransform& B,
 		UPROPERTY(meta = (Input))
 		FVector RigSpaceVelocity;
 		
-		UPROPERTY(meta = (Output))
+		UPROPERTY(Transient)
 		float FootTargetZAngle;
 
 		UPROPERTY(meta = (Output))
 		FQuat MovementAngleOffset;
+
+		UPROPERTY(meta = (Input))
+		float MaxDelVectorLengthPerSecond = 360.0f;
 	};
 
 	FVector EulerFromQuat(const FQuat& Rotation, EEulerRotationOrder RotationOrder = EEulerRotationOrder::ZYX, bool bUseUEHandyness = false);
 
 	FQuat FromTwoVectors(const FVector& A, const FVector& B);
 
+#pragma endregion
+
+#pragma region 消除帧率差异的用于Vector的Lerp函数
+	USTRUCT(meta = (DisplayName = "VectorLerp"), Category = "Lerp")
+	struct PROCEDURALANIM_API FRigUnit_VectorLerpIndependentOnFrameRate : public FRigUnit
+	{
+		GENERATED_BODY()
+
+		FRigUnit_VectorLerpIndependentOnFrameRate()
+		{
+			LerpedVector = TargetVector = InVector = FVector(1.f, 0.f, 0.f);
+			MaxDelVectorLengthPerSecond = 0.f;
+		}
+		RIGVM_METHOD()
+		virtual void Execute() override;
+
+		UPROPERTY(meta = (Input))
+		FVector InVector;
+		
+		UPROPERTY(meta = (Input))
+		FVector TargetVector;
+		
+		UPROPERTY(meta = (Input))
+		float MaxDelVectorLengthPerSecond = 0;
+		
+		UPROPERTY(meta = (Output))
+		FVector LerpedVector;
+	};
+
+	FVector VectorLerpIndependentOnFrameRate(FVector InVector, FVector TargetVector, float MaxDelVectorLengthPerSecond = 0, float DeltaTime = 0);
+
+	FVector MathVectorClampLength(FVector Value = FVector(1.f, 0.f, 0.f), float MinimumLength = 0, float MaximumLength = 1);
 #pragma endregion
 
