@@ -3,10 +3,12 @@
 #include "ControlRig/Public/Rigs/RigHierarchy.h"
 #include "AnimationCoreLibrary.h"
 #include "RigVMFunctions/Animation/RigVMFunction_GetDeltaTime.h"
+#include "RigVMFunctions/Math/RigVMFunction_MathQuaternion.h"
 #include "RigVMFunctions/Math/RigVMFunction_MathVector.h"
 #include "RigVMFunctions/Math/RigVMMathLibrary.h"
 
-FRigUnit_SetupFootArray_Execute()
+#pragma region SetupArray
+FRigUnit_SetupArray_Execute()
 {
 	DECLARE_SCOPE_HIERARCHICAL_COUNTER_RIGUNIT()
 	
@@ -23,6 +25,7 @@ FRigUnit_SetupFootArray_Execute()
 	PredictFeetLocationArray.Reset();
 	PerFootCyclePercentArray.Reset();
 	SavedFootPlatformArray.Reset();
+	HandArray.Reset();
 
 	const FRigElementKey RootBoneKey(TEXT("root"), ERigElementType::Bone);
 	if (!Hierarchy->Contains(RootBoneKey))
@@ -38,7 +41,7 @@ FRigUnit_SetupFootArray_Execute()
 		}
 		const FString BoneNameStr = ChildKey.Name.ToString();
 		
-		if (BoneNameStr.Contains(IncludeNameContains, ESearchCase::IgnoreCase) && !BoneNameStr.Contains(ExcludeNameContains, ESearchCase::IgnoreCase))
+		if (BoneNameStr.Contains(TEXT("foot"), ESearchCase::IgnoreCase) && !BoneNameStr.Contains(TEXT("ik"), ESearchCase::IgnoreCase))
 		{
 			FootArray.Add(ChildKey);
 			
@@ -55,10 +58,13 @@ FRigUnit_SetupFootArray_Execute()
 
 			SavedFootPlatformArray.Add(FTransform());
 		}
-		
+		else if (BoneNameStr.Contains(TEXT("hand"), ESearchCase::IgnoreCase) && !BoneNameStr.Contains(TEXT("ik"), ESearchCase::IgnoreCase))
+		{
+			HandArray.Add(ChildKey);
+		}
 	}
-
 }
+#pragma endregion
 
 FRigUnit_OffsetPelvis_Execute()
 {
@@ -175,6 +181,103 @@ FVector MathVectorClampLength(FVector Value, float MinimumLength, float MaximumL
 }
 #pragma endregion
 
+#pragma region 计算ArmMotion的主次轴朝向数据
+	FRigUnit_GetArmMotionAxisData_Execute()
+	{
+		//右骨骼朝向是反的，因此Index不为0时需要反向
+		PrimaryAxis   = (ArmIndex == 0) ? FVector(1, 0, 0) : FVector(-1, 0, 0);
+		SecondaryAxis = (ArmIndex == 0) ? FVector(0, -1, 0) : FVector(0, 1, 0);
+	}
+#pragma endregion
+
+#pragma region 计算ArmMotion的Effector的RotationAmount值
+	FRigUnit_GetArmMotionEffectorRotationAmount_Execute()
+	{
+		const float PerFootCyclePercent = PerFootCyclePercentArray[ArmIndex];
+		//摆动的正负号(向后摆动时需要乘-1)
+		const float ArmSwingSign = FVector::DotProduct(
+			RigSpaceVelocity.GetSafeNormal(),
+			MovementAngleOffset.RotateVector(FVector(0,1,0) )
+			);
+		//向后摆动时的幅度小一些
+		const float ArmSwingSignClamp = FMath::Clamp(ArmSwingSign,-0.5,1);
+		//摆动的幅度
+		const float ArmSwingAmplitude = MathFloatRemap(
+										RigSpaceVelocity.Length(),
+										0,
+										500,
+										0,
+										20,
+										true
+										);
+		//摆动的中轴向前偏移量
+		const float ArmSwingAxisOffset = MathFloatRemap(
+										RigSpaceVelocity.Length(),
+										0,
+										500,
+										0,
+										15,
+										true
+										);
+		//Sign * ArmSwingAmplitude * sin( 2Π * (PerFootCyclePercent+0.15)%1 ) + ArmSwingAxisOffset
+		const float ArmSwingCurve = sin(2 * UE_PI * FMath::Fmod(PerFootCyclePercent + 0.15f, 1.0f))
+									* ArmSwingSignClamp
+									* ArmSwingAmplitude
+									+ ArmSwingAxisOffset;
+		
+		RotateAmount = AnimationCore::QuatFromEuler(FVector(ArmSwingCurve, 0, 0));
+	}
+
+	float MathFloatRemap(float Value, float SourceMinimum, float SourceMaximum, float TargetMinimum, float TargetMaximum, bool bClamp)
+	{
+		float Result = 0.f;
+		float Ratio = 0.f;
+		if (FMath::IsNearlyEqual(SourceMinimum, SourceMaximum))
+		{
+			Ratio = 0.f;
+		}
+		else
+		{
+			Ratio = (Value - SourceMinimum) / (SourceMaximum - SourceMinimum);
+		}
+		if (bClamp)
+		{
+			Ratio = FMath::Clamp<float>(Ratio, 0.f, 1.f);
+		}
+		Result = FMath::Lerp<float>(TargetMinimum, TargetMaximum, Ratio);
+		return Result;
+	}
+#pragma endregion
+
+#pragma region ArmMotion时给Hand加一个基于移动速度的Z轴偏移量
+	FRigUnit_AddHandZOffset_Execute()
+	{
+		const float ZOffset = MathFloatRemap(
+			RigSpaceVelocity.Length(),
+			200,
+			500,
+			0,
+			12,
+			true
+			);
+		const FVector Offset = FVector(0, 0, ZOffset);
+		OutTranslation = InTranslation + Offset;
+	}
+#pragma endregion
 
 
-
+#pragma region 计算肩膀的晃动偏移
+FRigUnit_GetClavicleOffset_Execute()
+{
+	const float ClavicleZOffset = sin(2 * PI * 2 * (MasterCyclePercent-0.25) )
+									* MathFloatRemap(
+										RigSpaceVelocity.Length(),
+										0,
+										500,
+										0,
+										2,
+										true
+										) ;
+	ClavicleOffset = FVector(0, 0, ClavicleZOffset);
+}
+#pragma endregion
