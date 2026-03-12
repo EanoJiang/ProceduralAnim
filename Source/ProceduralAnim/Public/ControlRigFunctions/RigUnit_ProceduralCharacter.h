@@ -7,7 +7,7 @@
 #include "RigUnit_ProceduralCharacter.generated.h"
 
 #pragma region 初始化Array
-USTRUCT(meta = (DisplayName = "SetupArray"))
+USTRUCT(meta = (DisplayName = "SetupArray"), Category = "ConstructionEvent")
 struct PROCEDURALANIM_API FRigUnit_SetupArray : public FRigUnit_DynamicHierarchyBaseMutable
 {
 	GENERATED_BODY()
@@ -92,7 +92,7 @@ static FTransform InterpolateTransform(const FTransform& A, const FTransform& B,
 
 #pragma region 计算移动角度偏移
 	//计算移动角度偏移
-	USTRUCT(meta = (DisplayName = "GetMovementAngleOffset"), Category = "Calculate")
+	USTRUCT(meta = (DisplayName = "GetMovementAngleOffset"), Category = "CalculateVelocity")
 	struct PROCEDURALANIM_API FRigUnit_GetMovementAngleOffset : public FRigUnit
 	{
 		GENERATED_BODY()
@@ -119,7 +119,7 @@ static FTransform InterpolateTransform(const FTransform& A, const FTransform& B,
 
 #pragma region 消除帧率差异的用于Vector的Lerp函数
 	//消除帧率差异的用于Vector的Lerp函数
-	USTRUCT(meta = (DisplayName = "VectorLerp"), Category = "Lerp")
+	USTRUCT(meta = (DisplayName = "VectorLerp"), Category = "CalculateVelocity")
 	struct PROCEDURALANIM_API FRigUnit_VectorLerpIndependentOnFrameRate : public FRigUnit
 	{
 		GENERATED_BODY()
@@ -244,4 +244,48 @@ struct PROCEDURALANIM_API FRigUnit_GetClavicleOffset : public FRigUnit
 	UPROPERTY(meta = (Output))
 	FVector ClavicleOffset;
 };
+#pragma endregion
+
+
+#pragma region 绕着旋转点旋转
+	//绕着旋转点旋转
+	USTRUCT(meta = (DisplayName = "RotateAroundPoint"), Category = "RotationTools")
+	struct PROCEDURALANIM_API FRigUnit_RotateAroundPoint : public FRigUnit
+	{
+		GENERATED_BODY()
+
+		RIGVM_METHOD()
+		virtual void Execute() override;
+			
+		UPROPERTY(meta = (Input))
+		FTransform TransformToRotate;
+
+		UPROPERTY(meta = (Input))
+		FVector PointToRotateAround;
+
+		UPROPERTY(meta = (Input))
+		FQuat RotateAmount;
+
+		UPROPERTY(meta = (Output))
+		FTransform ModifiedTransform;
+		
+	};
+	//绕着旋转点旋转
+	FTransform RotateAroundPoint(FTransform TransformToRotate, FVector PointToRotateAround, FQuat RotateAmount);
+#pragma endregion
+
+#pragma region 身体倾斜
+	//身体倾斜
+	USTRUCT(meta = (DisplayName = "PelvisLean"), Category = "OffsetPelvis")
+	struct PROCEDURALANIM_API FRigUnit_PelvisLean : public FRigUnit_DynamicHierarchyBaseMutable
+	{
+		GENERATED_BODY()
+
+		RIGVM_METHOD()
+		virtual void Execute() override;
+
+		UPROPERTY(meta = (Input))
+		FVector RigSpaceVelocity;
+			
+	};
 #pragma endregion

@@ -6,6 +6,7 @@
 #include "RigVMFunctions/Math/RigVMFunction_MathQuaternion.h"
 #include "RigVMFunctions/Math/RigVMFunction_MathVector.h"
 #include "RigVMFunctions/Math/RigVMMathLibrary.h"
+#include "Transform/TransformableHandleUtils.h"
 
 #pragma region SetupArray
 FRigUnit_SetupArray_Execute()
@@ -279,5 +280,80 @@ FRigUnit_GetClavicleOffset_Execute()
 										true
 										) ;
 	ClavicleOffset = FVector(0, 0, ClavicleZOffset);
+}
+#pragma endregion
+
+
+#pragma region 绕着旋转点旋转
+	FRigUnit_RotateAroundPoint_Execute()
+	{
+		ModifiedTransform = RotateAroundPoint(TransformToRotate, PointToRotateAround, RotateAmount);
+	}
+
+	FTransform RotateAroundPoint(FTransform TransformToRotate, FVector PointToRotateAround, FQuat RotateAmount)
+	{
+		FTransform ModifiedTransform;
+		
+		FVector OutTranslation = RotateAmount.RotateVector(TransformToRotate.GetTranslation()-PointToRotateAround) + PointToRotateAround;
+		//旋转量 * 待旋转的Transform的当前Rotation
+		FQuat OutRotation = RotateAmount * TransformToRotate.GetRotation();
+		
+		ModifiedTransform.SetTranslation(OutTranslation);
+		ModifiedTransform.SetRotation(OutRotation);
+		ModifiedTransform.SetScale3D(TransformToRotate.GetScale3D());
+		
+		return ModifiedTransform;
+	}
+#pragma endregion
+
+
+#pragma region 身体倾斜
+FRigUnit_PelvisLean_Execute()
+{
+	URigHierarchy* Hierarchy = ExecuteContext.Hierarchy;
+	if(!Hierarchy)
+	{
+		return;
+	}
+
+	FRigElementKey PelvisRig = FRigElementKey(TEXT("pelvis"), ERigElementType::Bone);
+	FTransform TransformToRotate = Hierarchy->GetGlobalTransform(PelvisRig);
+	FVector PointToRotateAround = TransformToRotate.GetTranslation();
+
+	float LeanRotateAmount = MathFloatRemap(
+		RigSpaceVelocity.Length(),
+		0,
+		500,
+		0,
+		-10,
+		true
+		);
+	float RigSpaceVelocityYProjection = RigSpaceVelocity.GetSafeNormal().Dot(FVector::UnitY());
+	float LeanRotateAmountAroundX = LeanRotateAmount * RigSpaceVelocityYProjection;
+	//基于速度的前后旋转量(绕x轴)
+	FQuat RotateAmount = AnimationCore::QuatFromEuler(FVector(LeanRotateAmountAroundX, 0, 0));
+	//Pelvis自旋转后的Transform
+	FTransform ModifiedTransform = RotateAroundPoint(TransformToRotate, PointToRotateAround, RotateAmount);
+
+	
+	float LeanOffsetAmount = MathFloatRemap(
+		RigSpaceVelocity.Length(),
+		0,
+		500,
+		0,
+		10,
+		true
+		);
+	// 基于速度的前后位置偏移量(y轴)
+	float LeanOffsetAmountOnY =	LeanOffsetAmount * RigSpaceVelocityYProjection;
+	ModifiedTransform.AddToTranslation(FVector(0, LeanOffsetAmountOnY, 0));
+	
+	//最终倾斜后的Pelvis
+	FTransform FinalPelvis;
+	FinalPelvis.SetRotation(ModifiedTransform.GetRotation());
+	FinalPelvis.SetTranslation(ModifiedTransform.GetTranslation());
+	FinalPelvis.SetScale3D(ModifiedTransform.GetScale3D());
+	
+	Hierarchy->SetGlobalTransform(PelvisRig, FinalPelvis);
 }
 #pragma endregion

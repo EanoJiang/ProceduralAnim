@@ -1462,3 +1462,86 @@ FRigUnit_GetClavicleOffset_Execute()
 ## Tweaks fixes and improvements
 
 > 一些细节调整
+
+### 移动时身体倾斜
+
+![1773300319602](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260312164221144-1250011018.png)
+
+![1773300304976](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260312164222176-299544763.png)
+
+迁移到C++
+
+```cpp
+#pragma region 身体倾斜
+	//身体倾斜
+	USTRUCT(meta = (DisplayName = "PelvisLean"), Category = "OffsetPelvis")
+	struct PROCEDURALANIM_API FRigUnit_PelvisLean : public FRigUnit_DynamicHierarchyBaseMutable
+	{
+		GENERATED_BODY()
+
+		RIGVM_METHOD()
+		virtual void Execute() override;
+
+		UPROPERTY(meta = (Input))
+		FVector RigSpaceVelocity;
+	
+	};
+#pragma endregion
+```
+
+```cpp
+#pragma region 身体倾斜
+FRigUnit_PelvisLean_Execute()
+{
+	URigHierarchy* Hierarchy = ExecuteContext.Hierarchy;
+	if(!Hierarchy)
+	{
+		return;
+	}
+
+	FRigElementKey PelvisRig = FRigElementKey(TEXT("pelvis"), ERigElementType::Bone);
+	FTransform TransformToRotate = Hierarchy->GetGlobalTransform(PelvisRig);
+	FVector PointToRotateAround = TransformToRotate.GetTranslation();
+
+	float LeanRotateAmount = MathFloatRemap(
+		RigSpaceVelocity.Length(),
+		0,
+		500,
+		0,
+		-10,
+		true
+		);
+	float RigSpaceVelocityYProjection = RigSpaceVelocity.GetSafeNormal().Dot(FVector::UnitY());
+	float LeanRotateAmountAroundX = LeanRotateAmount * RigSpaceVelocityYProjection;
+	//基于速度的前后旋转量(绕x轴)
+	FQuat RotateAmount = AnimationCore::QuatFromEuler(FVector(LeanRotateAmountAroundX, 0, 0));
+	//Pelvis自旋转后的Transform
+	FTransform ModifiedTransform = RotateAroundPoint(TransformToRotate, PointToRotateAround, RotateAmount);
+
+
+	float LeanOffsetAmount = MathFloatRemap(
+		RigSpaceVelocity.Length(),
+		0,
+		500,
+		0,
+		10,
+		true
+		);
+	// 基于速度的前后位置偏移量(y轴)
+	float LeanOffsetAmountOnY =	LeanOffsetAmount * RigSpaceVelocityYProjection;
+	ModifiedTransform.AddToTranslation(FVector(0, LeanOffsetAmountOnY, 0));
+
+	//最终倾斜后的Pelvis
+	FTransform FinalPelvis;
+	FinalPelvis.SetRotation(ModifiedTransform.GetRotation());
+	FinalPelvis.SetTranslation(ModifiedTransform.GetTranslation());
+	FinalPelvis.SetScale3D(ModifiedTransform.GetScale3D());
+
+	Hierarchy->SetGlobalTransform(PelvisRig, FinalPelvis);
+}
+#pragma endregion
+```
+
+效果：
+
+![1773303948948](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260312164225823-2025886230.gif)
