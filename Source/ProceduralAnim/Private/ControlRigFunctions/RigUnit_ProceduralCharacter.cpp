@@ -208,7 +208,7 @@ FVector MathVectorClampLength(FVector Value, float MinimumLength, float MaximumL
 										0,
 										500,
 										0,
-										20,
+										50,
 										true
 										);
 		//摆动的中轴向前偏移量
@@ -225,7 +225,7 @@ FVector MathVectorClampLength(FVector Value, float MinimumLength, float MaximumL
 									* ArmSwingSignClamp
 									* ArmSwingAmplitude
 									+ ArmSwingAxisOffset;
-		
+	
 		RotateAmount = AnimationCore::QuatFromEuler(FVector(ArmSwingCurve, 0, 0));
 	}
 
@@ -307,7 +307,7 @@ FRigUnit_GetClavicleOffset_Execute()
 #pragma endregion
 
 
-#pragma region 身体倾斜
+#pragma region 身体前后倾斜
 FRigUnit_PelvisLean_Execute()
 {
 	URigHierarchy* Hierarchy = ExecuteContext.Hierarchy;
@@ -325,7 +325,7 @@ FRigUnit_PelvisLean_Execute()
 		0,
 		500,
 		0,
-		-10,
+		-15,
 		true
 		);
 	float RigSpaceVelocityYProjection = RigSpaceVelocity.GetSafeNormal().Dot(FVector::UnitY());

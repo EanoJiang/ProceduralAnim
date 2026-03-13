@@ -274,8 +274,8 @@ struct PROCEDURALANIM_API FRigUnit_GetClavicleOffset : public FRigUnit
 	FTransform RotateAroundPoint(FTransform TransformToRotate, FVector PointToRotateAround, FQuat RotateAmount);
 #pragma endregion
 
-#pragma region 身体倾斜
-	//身体倾斜
+#pragma region 身体前后倾斜
+	//身体前后倾斜
 	USTRUCT(meta = (DisplayName = "PelvisLean"), Category = "OffsetPelvis")
 	struct PROCEDURALANIM_API FRigUnit_PelvisLean : public FRigUnit_DynamicHierarchyBaseMutable
 	{
