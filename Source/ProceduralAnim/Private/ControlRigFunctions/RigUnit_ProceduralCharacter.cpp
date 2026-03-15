@@ -357,3 +357,24 @@ FRigUnit_PelvisLean_Execute()
 	Hierarchy->SetGlobalTransform(PelvisRig, FinalPelvis);
 }
 #pragma endregion
+
+#pragma region 计算每个脚的RotationFactor
+FRigUnit_CalculatePerFootRotationFactor_Execute()
+{
+	const float ZAngle = AnimationCore::EulerFromQuat(MovementAngleOffset).Z;
+	if (FootIndex == 0)
+	{
+		//每当左脚向右转：说明这时候是左脚在前的右向移动，让此时的FootRotationFactor = 0，也就是前腿不旋转
+		FootRotationFactor = (ZAngle > 0) ? 0 : 0.6;
+	}
+	else if (FootIndex == 1)
+	{
+		//每当右脚向左转：说明这时候是右脚在前的左向移动，让此时的FootRotationFactor = 0
+		FootRotationFactor = (ZAngle > 0) ? 0 : 0.6;
+	}
+	else
+	{
+		FootRotationFactor = 0.6;
+	}
+}
+#pragma endregion

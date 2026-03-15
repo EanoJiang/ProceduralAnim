@@ -1562,7 +1562,7 @@ FinalLegIK中的Clamp Sphere的圆心应该放在大腿Thigh处，而且这个Th
 
 ![1773394735431](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260313195848110-1583942563.png)
 
-### 修复：移动速度突变时脚部落点更新滞后
+### 修复：移动速度突变时脚部落点更新滞后A
 
 #### 脚部锁定位置加一个Clamp Sphere限制
 
@@ -1577,3 +1577,97 @@ FinalLegIK中的Clamp Sphere的圆心应该放在大腿Thigh处，而且这个Th
 #### 脚在地面停留的时间：速度越快，停留在地面的时间越长
 
 ![1773402829485](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260313195850298-1548534128.png)
+
+### 修复：身体前后倾斜速度以及手臂运动速度过快
+
+新建一个Lerp速度更慢的RigSpaceVelocity
+
+![1773532363438](image/[UE5]完全程序化的角色基础移动控制器/1773532363438.png)
+
+![1773532215013](image/[UE5]完全程序化的角色基础移动控制器/1773532215013.png)
+
+![1773532902670](image/[UE5]完全程序化的角色基础移动控制器/1773532902670.png)
+
+### 修复：移动方向改变时腿部交叉
+
+> 这个也是als的通病
+
+FootMovementAngleOffsetLimit变量名字修改为FootRotationFactor：
+
+![1773534211490](image/[UE5]完全程序化的角色基础移动控制器/1773534211490.png)
+
+![1773534296191](image/[UE5]完全程序化的角色基础移动控制器/1773534296191.png)
+
+可以发现当这个值为1时，脚部交叉现象几乎没了
+
+因此，我们需要让FootRotationFactor的值是动态的
+
+![1773546770830](image/[UE5]完全程序化的角色基础移动控制器/1773546770830.png)
+
+![1773546915517](image/[UE5]完全程序化的角色基础移动控制器/1773546915517.png)
+
+效果：
+
+![1773547733525](image/[UE5]完全程序化的角色基础移动控制器/1773547733525.gif)
+
+### 让膝盖的朝向略微受MovementAngleOffset影响
+
+![1773549842616](image/[UE5]完全程序化的角色基础移动控制器/1773549842616.png)
+
+### 脚部适应斜坡角度
+
+![1773553529570](image/[UE5]完全程序化的角色基础移动控制器/1773553529570.png)
+
+迁移到C++：
+
+```cpp
+#pragma region 计算每个脚的RotationFactor
+//计算每个脚的RotationFactor
+USTRUCT(meta = (DisplayName = "CalculatePerFootRotationFactor"), Category = "FootRotation")
+struct PROCEDURALANIM_API FRigUnit_CalculatePerFootRotationFactor : public FRigUnit
+{
+	GENERATED_BODY()
+
+	RIGVM_METHOD()
+	virtual void Execute() override;
+
+	UPROPERTY(meta = (Input))
+	FQuat MovementAngleOffset;
+
+	UPROPERTY(meta = (Input))
+	int FootIndex;
+
+	UPROPERTY(meta = (Output))
+	float FootRotationFactor;
+};
+#pragma endregion
+```
+
+```
+#pragma region 计算每个脚的RotationFactor
+FRigUnit_CalculatePerFootRotationFactor_Execute()
+{
+	const float ZAngle = AnimationCore::EulerFromQuat(MovementAngleOffset).Z;
+	if (FootIndex == 0)
+	{
+		//每当左脚向右转：说明这时候是左脚在前的右向移动，让此时的FootRotationFactor = 0，也就是前腿不旋转
+		FootRotationFactor = (ZAngle > 0) ? 0 : 0.6;
+	}
+	else if (FootIndex == 1)
+	{
+		//每当右脚向左转：说明这时候是右脚在前的左向移动，让此时的FootRotationFactor = 0
+		FootRotationFactor = (ZAngle > 0) ? 0 : 0.6;
+	}
+	else
+	{
+		FootRotationFactor = 0.6;
+	}
+}
+#pragma endregion
+```
+
+效果：
+
+![1773553602209](image/[UE5]完全程序化的角色基础移动控制器/1773553602209.png)
+
+### 身体向下偏移量固定值改为向下射线的距离

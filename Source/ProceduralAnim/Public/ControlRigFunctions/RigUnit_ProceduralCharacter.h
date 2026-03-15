@@ -275,17 +275,38 @@ struct PROCEDURALANIM_API FRigUnit_GetClavicleOffset : public FRigUnit
 #pragma endregion
 
 #pragma region 身体前后倾斜
-	//身体前后倾斜
-	USTRUCT(meta = (DisplayName = "PelvisLean"), Category = "OffsetPelvis")
-	struct PROCEDURALANIM_API FRigUnit_PelvisLean : public FRigUnit_DynamicHierarchyBaseMutable
-	{
-		GENERATED_BODY()
+//身体前后倾斜
+USTRUCT(meta = (DisplayName = "PelvisLean"), Category = "OffsetPelvis")
+struct PROCEDURALANIM_API FRigUnit_PelvisLean : public FRigUnit_DynamicHierarchyBaseMutable
+{
+	GENERATED_BODY()
 
-		RIGVM_METHOD()
-		virtual void Execute() override;
+	RIGVM_METHOD()
+	virtual void Execute() override;
 
-		UPROPERTY(meta = (Input))
-		FVector RigSpaceVelocity;
+	UPROPERTY(meta = (Input))
+	FVector RigSpaceVelocity;
 			
-	};
+};
+#pragma endregion
+
+#pragma region 计算每个脚的RotationFactor
+//计算每个脚的RotationFactor
+USTRUCT(meta = (DisplayName = "CalculatePerFootRotationFactor"), Category = "FootRotation")
+struct PROCEDURALANIM_API FRigUnit_CalculatePerFootRotationFactor : public FRigUnit
+{
+	GENERATED_BODY()
+
+	RIGVM_METHOD()
+	virtual void Execute() override;
+
+	UPROPERTY(meta = (Input))
+	FQuat MovementAngleOffset;
+
+	UPROPERTY(meta = (Input))
+	int FootIndex;
+
+	UPROPERTY(meta = (Output))
+	float FootRotationFactor;
+};
 #pragma endregion
