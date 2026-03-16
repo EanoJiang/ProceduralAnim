@@ -1582,11 +1582,15 @@ FinalLegIK中的Clamp Sphere的圆心应该放在大腿Thigh处，而且这个Th
 
 新建一个Lerp速度更慢的RigSpaceVelocity
 
-![1773532363438](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316072522008-1380920749.png)
+![1773648231733](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316172332449-213551652.png)
 
 ![1773532215013](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316072522435-901092649.png)
 
 ![1773532902670](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316072522651-1977857137.png)
+
+效果：
+
+![1773648411694](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316172337667-1722725401.gif)
 
 ### 修复：移动方向改变时腿部交叉
 
@@ -1604,11 +1608,61 @@ FootMovementAngleOffsetLimit变量名字修改为FootRotationFactor：
 
 ![1773546770830](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316072523320-741483704.png)
 
-![1773546915517](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316072523638-1051753799.png)
+![1773651943485](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316172338671-1356333647.png)
+
+迁移到C++：
+
+```cpp
+#pragma region 计算每个脚的RotationFactor
+//计算每个脚的RotationFactor
+USTRUCT(meta = (DisplayName = "CalculatePerFootRotationFactor"), Category = "FootRotation")
+struct PROCEDURALANIM_API FRigUnit_CalculatePerFootRotationFactor : public FRigUnit
+{
+	GENERATED_BODY()
+
+	RIGVM_METHOD()
+	virtual void Execute() override;
+
+	UPROPERTY(meta = (Input))
+	FQuat MovementAngleOffset;
+
+	UPROPERTY(meta = (Input))
+	int FootIndex;
+
+	UPROPERTY(meta = (Output))
+	float FootRotationFactor;
+};
+#pragma endregion
+```
+
+```cpp
+#pragma region 计算每个脚的RotationFactor
+FRigUnit_CalculatePerFootRotationFactor_Execute()
+{
+	const float ZAngle = AnimationCore::EulerFromQuat(MovementAngleOffset).Z;
+	if (FootIndex == 0)
+	{
+		//每当左脚向右转：说明这时候是左脚在前的右向移动，让此时的FootRotationFactor = 0，也就是前腿不旋转
+		FootRotationFactor = (ZAngle > 0) ? 0.5 : 0.9;
+	}
+	else if (FootIndex == 1)
+	{
+		//每当右脚向左转：说明这时候是右脚在前的左向移动，让此时的FootRotationFactor = 0
+		FootRotationFactor = (ZAngle > 0) ? 0.5 : 0.9;
+	}
+	else
+	{
+		FootRotationFactor = 0.9;
+	}
+}
+#pragma endregion
+```
 
 效果：
 
 ![1773547733525](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316072524024-514489791.gif)
+
+![1773652262046](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316172348480-1109096956.gif)
 
 ### 让膝盖的朝向略微受MovementAngleOffset影响
 
@@ -1675,3 +1729,94 @@ FRigUnit_CalculatePerFootRotationFactor_Execute()
 ![1773600686425](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316072525135-1640255676.png)
 
 ![1773600894239](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316072525363-542701322.png)
+
+### 修复：InputPose更换蹲姿时膝盖没有分开
+
+初始的FootPole朝向Vector数组：
+
+![1773630484110](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316172350565-1034170494.png)
+
+![1773630602623](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316172351340-1427504470.png)
+
+把原先SetFinalLegIK中的RotateVector固定值(0,10000,0)换为该数组
+
+![1773630424222](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316172351934-782040794.png)
+
+效果：
+
+![1773631123250](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316172352732-73618618.png)
+
+### 修改：ArmMotion中的肘部Pole朝向Vector也改为初始姿态的默认值
+
+![1773630780513](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316172353195-455587090.png)
+
+![1773631076327](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316172353880-1210360587.png)
+
+### 让脚部预测落点移动速度更加平滑
+
+![1773632470216](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316172354678-2001591475.png)
+
+### 修改VectorLerp函数逻辑：
+
+在即将到达目标值时减慢速度
+
+![1773632703264](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316172355308-1272951942.png)
+
+C++的修改：
+
+```cpp
+FVector VectorLerpIndependentOnFrameRate(FVector InVector, FVector TargetVector, float BlendSpeed, float DeltaTime)
+{
+	const float LerpFactor = FMath::Clamp<float>(BlendSpeed * DeltaTime, 0, 1);
+	FVector DeltaVector = (TargetVector - InVector) * LerpFactor;
+	return InVector + DeltaVector;
+}
+```
+
+所有用到该函数的地方需要更改BlendSpeed的值
+
+### 侧向移动时的ArmMotion
+
+#### 手臂前后摆动受移动角度偏移的影响少一些
+
+![1773649932932](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316172355767-2002061753.png)
+
+#### 摆动幅度受速度沿正前方分量的影响，斜向移动时这个分量小，映射之后手臂摆动幅度会变小
+
+![1773650041918](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316172356243-611330688.png)
+
+因此，C++的改动：
+
+```cpp
+		//摆动的正负号(向后摆动时需要乘-1)
+		const float ArmSwingSign = FVector::DotProduct(
+			RigSpaceVelocity.GetSafeNormal(),
+			MathQuaternionScale(MovementAngleOffset, 0.4).RotateVector(FVector(0,1,0) )
+			);
+		//向后摆动时的幅度小一些
+		const float ArmSwingSignClamp = FMath::Clamp(ArmSwingSign,-0.5,1);
+		//摆动的幅度
+		const float ArmSwingAmplitude = MathFloatRemap(
+										RigSpaceVelocity.Length(),
+										0,
+										500,
+										0,
+										50,
+										true
+										)
+										* FMath::Clamp(FMath::Abs(RigSpaceVelocity.Dot(FVector(0,0.4,0))), 0.4, 1);
+```
+
+效果：
+
+![1773651714895](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316172407461-744881468.gif)
+
+### 增加：上半身的左右摆动
+
+修改前：上半身没有左右摆动
+
+![1773652809091](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316172410003-865339448.gif)
+
+修改后：
+
+![1773652882659](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316172412307-1515247235.gif)

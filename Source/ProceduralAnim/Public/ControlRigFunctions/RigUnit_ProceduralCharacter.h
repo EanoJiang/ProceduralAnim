@@ -35,6 +35,9 @@ struct PROCEDURALANIM_API FRigUnit_SetupArray : public FRigUnit_DynamicHierarchy
 
 	UPROPERTY(meta=(Output))
 	TArray<FRigElementKey> HandArray;
+
+	UPROPERTY(meta=(Output))
+	TArray<FVector> DefaultFeetPoleVectorArray;
 };
 #pragma endregion
 
@@ -110,7 +113,7 @@ static FTransform InterpolateTransform(const FTransform& A, const FTransform& B,
 		FQuat MovementAngleOffset;
 
 		UPROPERTY(meta = (Input))
-		float MaxDelVectorLengthPerSecond = 360.0f;
+		float MaxDelVectorLengthPerSecond = 5.0f;
 	};
 
 	FQuat FromTwoVectors(const FVector& A, const FVector& B);
@@ -127,7 +130,7 @@ static FTransform InterpolateTransform(const FTransform& A, const FTransform& B,
 		FRigUnit_VectorLerpIndependentOnFrameRate()
 		{
 			LerpedVector = TargetVector = InVector = FVector(1.f, 0.f, 0.f);
-			MaxDelVectorLengthPerSecond = 0.f;
+			BlendSpeed = 0.f;
 		}
 		RIGVM_METHOD()
 		virtual void Execute() override;
@@ -139,15 +142,14 @@ static FTransform InterpolateTransform(const FTransform& A, const FTransform& B,
 		FVector TargetVector;
 		
 		UPROPERTY(meta = (Input))
-		float MaxDelVectorLengthPerSecond = 0;
+		float BlendSpeed = 0;
 		
 		UPROPERTY(meta = (Output))
 		FVector LerpedVector;
 	};
 
-	FVector VectorLerpIndependentOnFrameRate(FVector InVector, FVector TargetVector, float MaxDelVectorLengthPerSecond = 0, float DeltaTime = 0);
+	FVector VectorLerpIndependentOnFrameRate(FVector InVector, FVector TargetVector, float BlendSpeed = 0, float DeltaTime = 0);
 
-	FVector MathVectorClampLength(FVector Value = FVector(1.f, 0.f, 0.f), float MinimumLength = 0, float MaximumLength = 1);
 #pragma endregion
 
 
@@ -200,6 +202,8 @@ static FTransform InterpolateTransform(const FTransform& A, const FTransform& B,
 	};
 
 	float MathFloatRemap(float Value, float SourceMinimum, float SourceMaximum, float TargetMinimum, float TargetMaximum, bool bClamp);
+
+	FQuat MathQuaternionScale(FQuat Value, float Scale);
 
 #pragma endregion
 

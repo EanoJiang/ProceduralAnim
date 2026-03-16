@@ -27,6 +27,7 @@ FRigUnit_SetupArray_Execute()
 	PerFootCyclePercentArray.Reset();
 	SavedFootPlatformArray.Reset();
 	HandArray.Reset();
+	DefaultFeetPoleVectorArray.Reset();
 
 	const FRigElementKey RootBoneKey(TEXT("root"), ERigElementType::Bone);
 	if (!Hierarchy->Contains(RootBoneKey))
@@ -58,6 +59,8 @@ FRigUnit_SetupArray_Execute()
 			PerFootCyclePercentArray.Add(0);
 
 			SavedFootPlatformArray.Add(FTransform());
+
+			DefaultFeetPoleVectorArray.Add(FVector());
 		}
 		else if (BoneNameStr.Contains(TEXT("hand"), ESearchCase::IgnoreCase) && !BoneNameStr.Contains(TEXT("ik"), ESearchCase::IgnoreCase))
 		{
@@ -161,24 +164,15 @@ FRigUnit_VectorLerpIndependentOnFrameRate_Execute()
 	LerpedVector = VectorLerpIndependentOnFrameRate(
 		InVector,
 		TargetVector,
-		MaxDelVectorLengthPerSecond,
+		BlendSpeed,
 		ExecuteContext.GetDeltaTime<float>());
 }
 
-FVector VectorLerpIndependentOnFrameRate(FVector InVector, FVector TargetVector, float MaxDelVectorLengthPerSecond, float DeltaTime)
+FVector VectorLerpIndependentOnFrameRate(FVector InVector, FVector TargetVector, float BlendSpeed, float DeltaTime)
 {
-	FVector DeltaVector = MathVectorClampLength(TargetVector - InVector, 0,MaxDelVectorLengthPerSecond * DeltaTime);
+	const float LerpFactor = FMath::Clamp<float>(BlendSpeed * DeltaTime, 0, 1);
+	FVector DeltaVector = (TargetVector - InVector) * LerpFactor;
 	return InVector + DeltaVector;
-}
-
-FVector MathVectorClampLength(FVector Value, float MinimumLength, float MaximumLength)
-{
-	if (Value.IsNearlyZero())
-	{
-		return FVector::ZeroVector;
-	}
-	float Length = static_cast<float>(Value.Size());
-	return Value * FMath::Clamp<float>(Length, MinimumLength, MaximumLength) / Length;
 }
 #pragma endregion
 
@@ -198,7 +192,7 @@ FVector MathVectorClampLength(FVector Value, float MinimumLength, float MaximumL
 		//摆动的正负号(向后摆动时需要乘-1)
 		const float ArmSwingSign = FVector::DotProduct(
 			RigSpaceVelocity.GetSafeNormal(),
-			MovementAngleOffset.RotateVector(FVector(0,1,0) )
+			MathQuaternionScale(MovementAngleOffset, 0.4).RotateVector(FVector(0,1,0) )
 			);
 		//向后摆动时的幅度小一些
 		const float ArmSwingSignClamp = FMath::Clamp(ArmSwingSign,-0.5,1);
@@ -210,7 +204,8 @@ FVector MathVectorClampLength(FVector Value, float MinimumLength, float MaximumL
 										0,
 										50,
 										true
-										);
+										)
+										* FMath::Clamp(FMath::Abs(RigSpaceVelocity.Dot(FVector(0,0.4,0))), 0.4, 1);
 		//摆动的中轴向前偏移量
 		const float ArmSwingAxisOffset = MathFloatRemap(
 										RigSpaceVelocity.Length(),
@@ -247,6 +242,15 @@ FVector MathVectorClampLength(FVector Value, float MinimumLength, float MaximumL
 		}
 		Result = FMath::Lerp<float>(TargetMinimum, TargetMaximum, Ratio);
 		return Result;
+	}
+
+	FQuat MathQuaternionScale(FQuat Value, float Scale)
+	{
+		FVector Axis = FVector::ZeroVector;
+		float Angle = 0.f;
+		Value.ToAxisAndAngle(Axis, Angle);
+		Value = FQuat(Axis, Angle * Scale);
+		return Value;
 	}
 #pragma endregion
 
@@ -365,16 +369,16 @@ FRigUnit_CalculatePerFootRotationFactor_Execute()
 	if (FootIndex == 0)
 	{
 		//每当左脚向右转：说明这时候是左脚在前的右向移动，让此时的FootRotationFactor = 0，也就是前腿不旋转
-		FootRotationFactor = (ZAngle > 0) ? 0 : 0.6;
+		FootRotationFactor = (ZAngle > 0) ? 0.5 : 0.9;
 	}
 	else if (FootIndex == 1)
 	{
 		//每当右脚向左转：说明这时候是右脚在前的左向移动，让此时的FootRotationFactor = 0
-		FootRotationFactor = (ZAngle > 0) ? 0 : 0.6;
+		FootRotationFactor = (ZAngle > 0) ? 0.5 : 0.9;
 	}
 	else
 	{
-		FootRotationFactor = 0.6;
+		FootRotationFactor = 0.9;
 	}
 }
 #pragma endregion
