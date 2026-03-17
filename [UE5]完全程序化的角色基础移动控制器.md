@@ -1656,6 +1656,7 @@ FRigUnit_CalculatePerFootRotationFactor_Execute()
 	}
 }
 #pragma endregion
+
 ```
 
 效果：
@@ -1670,55 +1671,7 @@ FRigUnit_CalculatePerFootRotationFactor_Execute()
 
 ### 脚部适应斜坡角度
 
-![1773553529570](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316072524640-1311137239.png)
-
-迁移到C++：
-
-```cpp
-#pragma region 计算每个脚的RotationFactor
-//计算每个脚的RotationFactor
-USTRUCT(meta = (DisplayName = "CalculatePerFootRotationFactor"), Category = "FootRotation")
-struct PROCEDURALANIM_API FRigUnit_CalculatePerFootRotationFactor : public FRigUnit
-{
-	GENERATED_BODY()
-
-	RIGVM_METHOD()
-	virtual void Execute() override;
-
-	UPROPERTY(meta = (Input))
-	FQuat MovementAngleOffset;
-
-	UPROPERTY(meta = (Input))
-	int FootIndex;
-
-	UPROPERTY(meta = (Output))
-	float FootRotationFactor;
-};
-#pragma endregion
-```
-
-```
-#pragma region 计算每个脚的RotationFactor
-FRigUnit_CalculatePerFootRotationFactor_Execute()
-{
-	const float ZAngle = AnimationCore::EulerFromQuat(MovementAngleOffset).Z;
-	if (FootIndex == 0)
-	{
-		//每当左脚向右转：说明这时候是左脚在前的右向移动，让此时的FootRotationFactor = 0，也就是前腿不旋转
-		FootRotationFactor = (ZAngle > 0) ? 0 : 0.6;
-	}
-	else if (FootIndex == 1)
-	{
-		//每当右脚向左转：说明这时候是右脚在前的左向移动，让此时的FootRotationFactor = 0
-		FootRotationFactor = (ZAngle > 0) ? 0 : 0.6;
-	}
-	else
-	{
-		FootRotationFactor = 0.6;
-	}
-}
-#pragma endregion
-```
+![1773654387279](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316183604404-1640969451.png)
 
 效果：
 
@@ -1820,3 +1773,25 @@ FVector VectorLerpIndependentOnFrameRate(FVector InVector, FVector TargetVector,
 修改后：
 
 ![1773652882659](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316172412307-1515247235.gif)
+
+## Improved foot traces and foot avoidance
+
+> 优化脚部轨迹追踪、避免脚部交叉
+
+### 修复：从高处落下时，脚部位置延后导致轨迹异常
+
+> 解决方法：
+
+1.预测脚部落点的节点中，如果Sphere Trace没有击中，那么沿用以前的值
+
+![1773657318473](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316183605290-2140226576.png)
+
+2.限制脚的高度
+
+![1773657789360](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316184850650-1544869834.png)
+
+效果：
+
+![1773657973728](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316184854549-274501316.gif)
+
+### 当两只脚踩在不同高度的平面时，按照更低的脚的追踪轨迹做PelvisOffset
