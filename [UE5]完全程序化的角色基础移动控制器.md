@@ -1711,7 +1711,7 @@ FRigUnit_CalculatePerFootRotationFactor_Execute()
 
 ### 让脚部预测落点移动速度更加平滑
 
-![1773632470216](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316172354678-2001591475.png)
+![1773632470216](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260316172354678-2001591475.png)x
 
 ### 修改VectorLerp函数逻辑：
 
@@ -1880,7 +1880,7 @@ Count设回3
 
 #### 比对两次Trace结果与原始落点的位置偏移量，优先选取偏移更小的
 
-> OffsetFactor影响比重更小
+> OffsetFactor影响比重更小，也就是原始落点的影响权重更大
 
 ![1773911031245](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260319183826766-516122743.png)
 
@@ -1916,14 +1916,96 @@ Count设回3
 
 #### 修复：脚部最终落点重叠
 
-让原始落点的影响权重更大
+> 修改前：
+>
+> ![1773975320871](image/[UE5]完全程序化的角色基础移动控制器/1773975320871.gif)
+
+传入FootIndex区分左右脚，左脚Trace向左偏移，右脚Trace向右偏移
+
+![1773974591653](image/[UE5]完全程序化的角色基础移动控制器/1773974591653.png)
+
+从图中可以看出，左右方向对应x方向上的正负，因此在x方向上，左脚偏移1，右脚偏移-1
+
+![1773974772391](image/[UE5]完全程序化的角色基础移动控制器/1773974772391.png)
+
+![1773975236918](image/[UE5]完全程序化的角色基础移动控制器/1773975236918.png)
+
+效果：
+
+![1773974943449](image/[UE5]完全程序化的角色基础移动控制器/1773974943449.gif)
+
+![1773989144653](image/[UE5]完全程序化的角色基础移动控制器/1773989144653.gif)
+
+### 修复腿部交叉
+
+#### 如果移动方向偏移MovementAngleOffset在一个不恰当的时机Lerp到目标值，会出现腿部交叉
+
+> 这个不恰当的时机就是左右脚循环的起步阶段，在这个阶段不让移动方向偏移，也就是让MovementAngleOffset的Lerp速度 = 0即可解决
+
+改动：
+
+![1773976806257](image/[UE5]完全程序化的角色基础移动控制器/1773976806257.png)
+
+![1773977724002](image/[UE5]完全程序化的角色基础移动控制器/1773977724002.png)
+
+![1773977752510](image/[UE5]完全程序化的角色基础移动控制器/1773977752510.png)
+
+因此，c++的改动：
+
+```cpp
+#pragma region 计算移动角度偏移
+	FRigUnit_GetMovementAngleOffset_Execute()
+	{
+		const float OriginalZAngle = AnimationCore::EulerFromQuat(
+			FromTwoVectors(FVector(0,1,0),RigSpaceVelocity)
+			).Z;
+
+		//TargetZAngle
+		float TargetZAngle = OriginalZAngle;
+		if (OriginalZAngle > 100)
+		{
+			TargetZAngle = OriginalZAngle - 180;
+		}
+		else if (OriginalZAngle < -100)
+		{
+			TargetZAngle = OriginalZAngle + 180;
+		}
+
+		//Lerp速度
+		float LerpSpeed = 6;
+		bool IsBigAngleOffset = abs(TargetZAngle - AnimationCore::EulerFromQuat(MovementAngleOffset).Z) > 90;
+		bool IsInStartMoment = FMath::Modulo(MasterCyclePercent * 2, 1) < 0.4;
+		if (IsBigAngleOffset && !IsInStartMoment)
+		{
+			LerpSpeed = 0;
+		}
+
+		FVector LerpedVector = VectorLerpIndependentOnFrameRate(
+			AnimationCore::EulerFromQuat(MovementAngleOffset),
+			FVector(0,0,TargetZAngle),
+			LerpSpeed,
+			ExecuteContext.GetDeltaTime<float>()
+			);
+
+		MovementAngleOffset = AnimationCore::QuatFromEuler(FVector(0,0,LerpedVector.Z));
+	}
+```
+
+#### 让一条腿躲避另一条腿
+
+让左脚始终在左侧，右脚始终在右侧
+
+![1774003880838](image/[UE5]完全程序化的角色基础移动控制器/1774003880838.png)
+
+![1774003897433](image/[UE5]完全程序化的角色基础移动控制器/1774003897433.png)
+
+![1774004546684](image/[UE5]完全程序化的角色基础移动控制器/1774004546684.png)
+
+![1774004610494](image/[UE5]完全程序化的角色基础移动控制器/1774004610494.png)
+
+效果：
+
+![1774004961904](image/[UE5]完全程序化的角色基础移动控制器/1774004961904.gif)
 
 
-
-
-
-
-
-### 修复腿部交叉：切换方向时区分左右脚
-
-> 待解决
+最终效果：

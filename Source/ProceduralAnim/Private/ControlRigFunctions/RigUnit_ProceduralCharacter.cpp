@@ -118,30 +118,41 @@ FRigUnit_GetFinalLegIKAxisData_Execute()
 }
 
 
-
 #pragma region 计算移动角度偏移
 	FRigUnit_GetMovementAngleOffset_Execute()
 	{
 		const float OriginalZAngle = AnimationCore::EulerFromQuat(
 			FromTwoVectors(FVector(0,1,0),RigSpaceVelocity)
 			).Z;
-		if (OriginalZAngle > 100)
+	
+		//TargetZAngle
+		float TargetZAngle = OriginalZAngle;
+		if (OriginalZAngle > 110)
 		{
-			FootTargetZAngle = OriginalZAngle - 180;
+			TargetZAngle = OriginalZAngle - 180;
 		}
-		else if (OriginalZAngle < -100)
+		else if (OriginalZAngle < -110)
 		{
-			FootTargetZAngle = OriginalZAngle + 180;
+			TargetZAngle = OriginalZAngle + 180;
+		}
+	
+		//Lerp速度
+		float LerpSpeed;
+		bool IsBigAngleOffset = abs(TargetZAngle - AnimationCore::EulerFromQuat(MovementAngleOffset).Z) > 90;
+		bool IsInStartMoment = FMath::Modulo(MasterCyclePercent * 2, 1) < 0.4;
+		if (IsBigAngleOffset && !IsInStartMoment)
+		{
+			LerpSpeed = 0.2;
 		}
 		else
 		{
-			FootTargetZAngle = OriginalZAngle;
+			LerpSpeed = 6;
 		}
 	
 		FVector LerpedVector = VectorLerpIndependentOnFrameRate(
 			AnimationCore::EulerFromQuat(MovementAngleOffset),
-			FVector(0,0,FootTargetZAngle),
-			MaxDelVectorLengthPerSecond,
+			FVector(0,0,TargetZAngle),
+			LerpSpeed,
 			ExecuteContext.GetDeltaTime<float>()
 			);
 	

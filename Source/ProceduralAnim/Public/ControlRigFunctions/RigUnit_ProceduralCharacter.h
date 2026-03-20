@@ -105,15 +105,12 @@ static FTransform InterpolateTransform(const FTransform& A, const FTransform& B,
 
 		UPROPERTY(meta = (Input))
 		FVector RigSpaceVelocity;
-		
-		UPROPERTY(Transient)
-		float FootTargetZAngle;
+
+		UPROPERTY(meta = (Input))
+		float MasterCyclePercent;
 
 		UPROPERTY(meta = (Output))
 		FQuat MovementAngleOffset;
-
-		UPROPERTY(meta = (Input))
-		float MaxDelVectorLengthPerSecond = 5.0f;
 	};
 
 	FQuat FromTwoVectors(const FVector& A, const FVector& B);
