@@ -211,7 +211,7 @@ FVector VectorLerpIndependentOnFrameRate(FVector InVector, FVector TargetVector,
 		const float ArmSwingAmplitude = MathFloatRemap(
 										RigSpaceVelocity.Length(),
 										0,
-										500,
+										300,
 										0,
 										50,
 										true
@@ -221,7 +221,7 @@ FVector VectorLerpIndependentOnFrameRate(FVector InVector, FVector TargetVector,
 		const float ArmSwingAxisOffset = MathFloatRemap(
 										RigSpaceVelocity.Length(),
 										0,
-										500,
+										300,
 										0,
 										15,
 										true
@@ -270,8 +270,8 @@ FVector VectorLerpIndependentOnFrameRate(FVector InVector, FVector TargetVector,
 	{
 		const float ZOffset = MathFloatRemap(
 			RigSpaceVelocity.Length(),
-			200,
-			500,
+			0,
+			300,
 			0,
 			12,
 			true
@@ -289,7 +289,7 @@ FRigUnit_GetClavicleOffset_Execute()
 									* MathFloatRemap(
 										RigSpaceVelocity.Length(),
 										0,
-										500,
+										300,
 										0,
 										2,
 										true
@@ -338,7 +338,7 @@ FRigUnit_PelvisLean_Execute()
 	float LeanRotateAmount = MathFloatRemap(
 		RigSpaceVelocity.Length(),
 		0,
-		500,
+		300,
 		0,
 		-15,
 		true
@@ -354,7 +354,7 @@ FRigUnit_PelvisLean_Execute()
 	float LeanOffsetAmount = MathFloatRemap(
 		RigSpaceVelocity.Length(),
 		0,
-		500,
+		300,
 		0,
 		10,
 		true
