@@ -1,6 +1,6 @@
-## 白话ControlRig完全程序化角色基础移动
+# 白话ControlRig完全程序化角色基础移动
 
-### 初始化要用到的数组
+## 初始化要用到的数组
 
 ![1774252443658](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260323175904125-300876890.png)
 
@@ -106,25 +106,25 @@ FRigUnit_SetupArray_Execute()
 
 ```
 
-### 骨骼控制链全流程
+## 骨骼控制链全流程
 
 ![1774252747815](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260323175905041-1986037003.png)
 
-#### 参数准备
+### 参数准备
 
-##### CalculateVelocity
+#### CalculateVelocity
 
-###### 世界空间速度WorldSpaceVelocity：
+##### 世界空间速度WorldSpaceVelocity：
 
 WorldSpaceVelocity = 根骨骼世界位置的前后帧差 / DeltaTime
 
-###### 世界空间前后帧相对变换 WorldDeltaTransform：
+##### 世界空间前后帧相对变换 WorldDeltaTransform：
 
 WorldDeltaTransform =  `T_now * T_last^(-1)`
 
 也就是先通过逆变换撤销上一帧的世界变换，再与当前帧的世界变换相乘，最终得到 “从上一帧到当前帧，根骨骼在世界空间中发生的相对变换”。
 
-###### 骨骼空间速度RigSpaceVelocity：
+##### 骨骼空间速度RigSpaceVelocity：
 
 RigSpaceVelocity的目标速度 = (**世界空间速度**+根骨骼的世界位置)的局部位置 - 根骨骼的局部位置
 
@@ -189,13 +189,13 @@ RigSpaceVelocity的目标速度 = (**世界空间速度**+根骨骼的世界位�
 > #pragma endregion
 > ```
 
-###### 最大步幅MaxFootStrideLength
+##### 最大步幅MaxFootStrideLength
 
 MaxFootStrideLength = `速度[200.0, 300.0]`Remap到 `[65.0, 45.0]`的步长范围
 
 速度越快，最大步长越短；速度越慢，最大步长越长。
 
-###### 移动角度偏移MovementAngleOffset
+##### 移动角度偏移MovementAngleOffset
 
 MovementAngleOffset = GetMovementAngleOffset(移动速度RigSpaceVelocity，步态周期进度MasterCyclePercent)
 
@@ -281,35 +281,35 @@ MovementAngleOffset = GetMovementAngleOffset(移动速度RigSpaceVelocity，步�
 >
 > ```
 
-##### CalculateCycle
+#### CalculateCycle
 
-###### 步态周期长度CycleLength
+##### 步态周期长度CycleLength
 
 CycleLength = 空中摆动时间SwingTime + 地面停留时间
 
 地面停留时间 = **最大步幅MaxFootStrideLength** / **Max(速度，速度从[0,200]Remap到[600,200])**
 
-###### 摆动时间占据步态周期长度的百分比SwingTimeAsAPercent
+##### 摆动时间占据步态周期长度的百分比SwingTimeAsAPercent
 
 SwingTimeAsAPercent = 空中摆动时间SwingTime / 步态周期长度CycleLength
 
-###### 步态周期百分比MasterCyclePercent
+##### 步态周期百分比MasterCyclePercent
 
 MasterCyclePercent \= ( MasterCyclePercent + DeltaTime/步态周期长度CycleLength ) % 1
 
 最后除模1，把MasterCyclePercent限制在0到1
 
-###### 每只脚的周期进度数组PerFootCyclePercentArray
+##### 每只脚的周期进度数组PerFootCyclePercentArray
 
 PerFootCyclePercentArray[FootIndex] = (步态周期百分比**MasterCyclePercent + FootIndex × 0.5**) % 1
 
 循环写入，FootIndex × 0.5是因为双脚之间刚好差半个步态周期
 
-##### 循环遍历
+#### 循环遍历
 
-###### 每只脚的FootRig和FootIndex
+##### 每只脚的FootRig和FootIndex
 
-###### 每只脚的朝向因子FootRotationFactor
+##### 每只脚的朝向因子FootRotationFactor
 
 FootRotationFactor = CalculatePerFootRotationFactor(MovementAngleOffset,FootIndex)
 
@@ -361,12 +361,168 @@ FootRotationFactor = CalculatePerFootRotationFactor(MovementAngleOffset,FootInde
 > #pragma endregion
 > ```
 
-###### 保存脚默认的极坐标矢量数组DefaultFeetPoleVectorArray
+##### 保存脚默认的极坐标矢量数组DefaultFeetPoleVectorArray
 
 DefaultFeetPoleVectorArray[FootIndex] = 膝盖位置
 
 膝盖位置 = 小腿Calf - 大腿Thigh与脚部Foot的中点
 
-#### 实际功能节点
+##### 最主要的功能函数节点——RotateAroundPoint
 
-##### 预测脚部落点
+> Transform绕着Transform旋转RotateAmount
+
+```cpp
+#pragma region 绕着旋转点旋转
+	//绕着旋转点旋转
+	USTRUCT(meta = (DisplayName = "RotateAroundPoint"), Category = "RotationTools")
+	struct PROCEDURALANIM_API FRigUnit_RotateAroundPoint : public FRigUnit
+	{
+		GENERATED_BODY()
+
+		RIGVM_METHOD()
+		virtual void Execute() override;
+		
+		UPROPERTY(meta = (Input))
+		FTransform TransformToRotate;
+
+		UPROPERTY(meta = (Input))
+		FVector PointToRotateAround;
+
+		UPROPERTY(meta = (Input))
+		FQuat RotateAmount;
+
+		UPROPERTY(meta = (Output))
+		FTransform ModifiedTransform;
+	
+	};
+	//绕着旋转点旋转
+	FTransform RotateAroundPoint(FTransform TransformToRotate, FVector PointToRotateAround, FQuat RotateAmount);
+#pragma endregion
+```
+
+```cpp
+#pragma region 绕着旋转点旋转
+	FRigUnit_RotateAroundPoint_Execute()
+	{
+		ModifiedTransform = RotateAroundPoint(TransformToRotate, PointToRotateAround, RotateAmount);
+	}
+
+	FTransform RotateAroundPoint(FTransform TransformToRotate, FVector PointToRotateAround, FQuat RotateAmount)
+	{
+		FTransform ModifiedTransform;
+	
+		FVector OutTranslation = RotateAmount.RotateVector(TransformToRotate.GetTranslation()-PointToRotateAround) + PointToRotateAround;
+		//旋转量 * 待旋转的Transform的当前Rotation
+		FQuat OutRotation = RotateAmount * TransformToRotate.GetRotation();
+	
+		ModifiedTransform.SetTranslation(OutTranslation);
+		ModifiedTransform.SetRotation(OutRotation);
+		ModifiedTransform.SetScale3D(TransformToRotate.GetScale3D());
+	
+		return ModifiedTransform;
+	}
+#pragma endregion
+```
+
+##### 控制身体部位的实际功能节点
+
+#### 预测脚部落点PredictFootLandingSpot
+
+##### 预测前进距离PredictFwdDistance
+
+PredictFwdDistance = CalculatePredictFwdDistance()
+
+> CalculatePredictFwdDistance函数：
+>
+> PredictFwdDistance = RigSpaceVelocity_SlowLerp × 预测脚部即将落地的时间
+>
+> 预测脚部即将落地的时间 = ( SwingTimeAsAPercent - PerFootCyclePercentArray[FootIndex] ) × CycleLength
+
+##### 基于步幅的预测前进距离PredictFwdDistanceBasedOnStride
+
+> PredictFwdDistanceBasedOnStride函数：
+>
+> PredictFwdDistanceBasedOnStride = PredictFwdDistance × 移动方向上的步幅
+>
+> 移动方向上的步幅 = RigSpaceVelocity_SlowLerp× CycleLength/SwingTime
+
+##### 预测脚部位置PredictFeetLocation
+
+PredictFeetLocation = 脚部位置(适配移动角度偏移) + PredictFwdDistanceBasedOnStride
+
+脚部位置(适配移动角度偏移) = RotateAroundPoint(Foot, Pelvis, MovementAngleOffset)
+
+也就是FootRig 绕着 Pelvis 旋转 MovementAngleOffset值
+
+> 最后为了确保脚在地面上，需要SphereTrace：
+>
+> SphereTrace击中的HitLocation就是最终的PredictFeetLocation
+
+##### 落地点的法向量FootLandHitPointNormal
+
+FootLandHitPointNormal = SphereTrace击中的HitNormal
+
+##### 落地点朝向FootLandingRotation
+
+FootLandingRotation = MovementAngleOffset × FootRotationFactor
+
+##### 多点矩阵Trace检测得到的预测脚部落点PredictFeetLocationAfterTrace
+
+> 防止脚部靠近障碍物时穿模
+
+PredictFeetLocationAfterTrace = RectangleFootLandTraces(FootLandingRotation, PredictFeetLocation, FootIndex)
+
+> RectangleFootLandTraces函数
+
+###### 区分左右脚的偏移方向OffsetDirection
+
+OffsetDirection = (FootIndex?) 1 : -1
+
+###### TraceIndex
+
+两层循环，外循环TraceIndex1，内循环TraceIndex2
+
+###### 每次偏移前后方向(Y轴)需要抵消的量DistanceCenterToBoundary
+
+DistanceCenterToBoundary = 偏移量总长 / 2
+
+偏移量总长 = 每一次循环偏移量OffsetPerLoop × (循环次数-1)
+
+###### 每个点的偏移量长宽XOffset、YOffset
+
+左右XOffset = OffsetDirection × TraceIndex2 × OffsetPerLoop
+
+前后YOffset = TraceIndex1 × OffsetPerLoop - DistanceCenterToBoundary
+
+###### 一次Trace
+
+每个Trace点PerDetectedPoint = FootLandingSpot + FVector(XOffset, YOffset, 0)
+
+PerDetectedPoint经过SphereTrace之后得到 IsFirstTraceHit 和 FirstTraceResult
+
+###### 二次Trace
+
+一次Trace的起止点沿着FootLandingSpot的方向偏移得到二次Trace的起止点，结果得到SecondTraceResult
+
+###### Trace检测后的落点影响因素
+
+高度因素HeightFactor = 
+
+
+##### 最终的预测脚部落点FinalFootLandingLocation
+
+> 需要抵消预测前进距离
+
+FinalFootLandingLocation = PredictFeetLocationAfterTrace - PredictFwdDistance
+
+##### 适应斜面角度的脚部落点朝向FootLandingRotationBySlope
+
+> 只需要让FootLandingRotation绕x、y轴的旋转量调用AimMath以瞄准落地点的法向量
+
+FootLandingRotationBySlope.XY = AimMath(InputTransform.Rotation:FootLandingRotation,  Secondary.Target:FootLandHitPointNormal).XY
+
+FootLandingRotationBySlope.Z = FootLandingRotation.Z
+
+##### 将Rotation和Location设置为PredictFeetLocationArray数组的目标值
+
+Location设置的时候需要Lerp平滑数值，BlendSpeed = 6
