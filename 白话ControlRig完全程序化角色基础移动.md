@@ -80,7 +80,7 @@ FRigUnit_SetupArray_Execute()
 		if (BoneNameStr.Contains(TEXT("foot"), ESearchCase::IgnoreCase) && !BoneNameStr.Contains(TEXT("ik"), ESearchCase::IgnoreCase))
 		{
 			FootArray.Add(ChildKey);
-	
+
 			FVector LockedFootLocationElementTranslation = Hierarchy->GetGlobalTransform(ChildKey).GetTranslation() + FVector(0.0f, 0.0f, -13.5f);
 			FTransform LockedFootLocationElement;
 			LockedFootLocationElement.SetTranslation(LockedFootLocationElementTranslation);
@@ -89,7 +89,7 @@ FRigUnit_SetupArray_Execute()
 			IsFootLockedArray.Add(false);
 
 			PredictFeetLocationArray.Add(FTransform());
-	
+
 			PerFootCyclePercentArray.Add(0);
 
 			SavedFootPlatformArray.Add(FTransform());
@@ -381,7 +381,7 @@ DefaultFeetPoleVectorArray[FootIndex] = 膝盖位置
 
 		RIGVM_METHOD()
 		virtual void Execute() override;
-		
+
 		UPROPERTY(meta = (Input))
 		FTransform TransformToRotate;
 
@@ -393,7 +393,7 @@ DefaultFeetPoleVectorArray[FootIndex] = 膝盖位置
 
 		UPROPERTY(meta = (Output))
 		FTransform ModifiedTransform;
-	
+
 	};
 	//绕着旋转点旋转
 	FTransform RotateAroundPoint(FTransform TransformToRotate, FVector PointToRotateAround, FQuat RotateAmount);
@@ -410,21 +410,21 @@ DefaultFeetPoleVectorArray[FootIndex] = 膝盖位置
 	FTransform RotateAroundPoint(FTransform TransformToRotate, FVector PointToRotateAround, FQuat RotateAmount)
 	{
 		FTransform ModifiedTransform;
-	
+
 		FVector OutTranslation = RotateAmount.RotateVector(TransformToRotate.GetTranslation()-PointToRotateAround) + PointToRotateAround;
 		//旋转量 * 待旋转的Transform的当前Rotation
 		FQuat OutRotation = RotateAmount * TransformToRotate.GetRotation();
-	
+
 		ModifiedTransform.SetTranslation(OutTranslation);
 		ModifiedTransform.SetRotation(OutRotation);
 		ModifiedTransform.SetScale3D(TransformToRotate.GetScale3D());
-	
+
 		return ModifiedTransform;
 	}
 #pragma endregion
 ```
 
-##### 控制身体部位的实际功能节点
+### 控制身体部位的实际功能节点
 
 #### 预测脚部落点PredictFootLandingSpot
 
@@ -506,8 +506,37 @@ PerDetectedPoint经过SphereTrace之后得到 IsFirstTraceHit 和 FirstTraceResu
 
 ###### Trace检测后的落点影响因素
 
-高度因素HeightFactor = 
+> 高度因素HeightFactor：优先选取更高的，也就是数值越小的优先级越高
 
+HeightFactor = Min(FirstTraceResult.Z,SecondTraceResult.Z).Remap(-10,20,1,0.5)
+
+> 偏移量因素OffsetFactor：优先选取偏移量更小的
+
+OffsetFactor = OffsetAmount.Remap(0,20,0,1)
+
+OffsetAmount = √(x^2 + y^2)
+
+> Trace是否击中因素FirstTraceHitFactor
+
+FirstTraceHitFactor = (IsFirstTraceHit)? 0: 1
+
+> 两次Trace结果的高度差因素TraceHeightDeltaFactor
+
+TraceHeightDeltaFactor = Abs(FirstTraceResult.Z - SecondTraceResult.Z)
+
+###### 最终权重如果小于，选择第一次Trace结果为落点
+
+```cpp
+if(TraceHeightDeltaFactor + FirstTraceHitFactor + OffsetFactor + HeightFactor < LowestResult)
+{
+	LowestResult = TraceHeightDeltaFactor + FirstTraceHitFactor + OffsetFactor + HeightFactor;
+	TempLandLocation = (IsFirstTraceHit)? FirstTraceResult: SecondTraceResult;
+}
+```
+
+###### 外循环结束后
+
+Return Translation = TempLandLocation, Rotation = FootLandingSpot.Rotation
 
 ##### 最终的预测脚部落点FinalFootLandingLocation
 
@@ -526,3 +555,260 @@ FootLandingRotationBySlope.Z = FootLandingRotation.Z
 ##### 将Rotation和Location设置为PredictFeetLocationArray数组的目标值
 
 Location设置的时候需要Lerp平滑数值，BlendSpeed = 6
+
+#### 计算脚部目标平台CalculateFootTargetPlatform
+
+SavedFootPlatformArray[FootIndex] = CalculateFootTargetPlatform()
+
+##### 如果处于Locked，也就是IsFootLockedArray[FootIndex] == true
+
+###### 抵消前后帧的世界变换，来实现脚部位置的锁定，这也是锁定状态下的目标脚踩位置
+
+Clamp限制前的结果 = LockedFeetLocationArray[FootIndex] × WorldDeltaTransform.Inverse
+
+LockedFeetLocationArray[FootIndex].Translation = Clamp限制前的结果.Translation.ClampSpatially(0,100)
+
+LockedFeetLocationArray[FootIndex].Rotation.XY = Clamp限制前的结果.Rotation.XY
+
+LockedFeetLocationArray[FootIndex].Rotation.Z = Clamp限制前的结果.Rotation.Z.绕Z轴旋转受MovementAngleOffset限制
+
+> 限制：
+>
+> Clamp限制前的结果.Rotation.Z.Clamp(Min,Max)
+>
+> Min = (MovementAngleOffset×FootRotationFactor).Z - 25
+>
+> Max= (MovementAngleOffset×FootRotationFactor).Z + 25
+
+TempFootPlatform = LockedFeetLocationArray[FootIndex]
+
+###### 更新Lock/UnLock状态
+
+IsFootLockedArray[FootIndex] = (PerFootCyclePercentArray[FootIndex] > SwingTimeAsAPercent)
+
+##### 如果处于UnLocked，也就是sFootLockedArray[FootIndex] == false
+
+###### 对脚踩目标平台位置进行CalculateFootSpline自定义插值计算
+
+TempFootPlatform = CalculateFootSpline(StartingTransform, EndTransform, Alpha)
+
+StartingTransform = LockedFeetLocationArray[FootIndex]
+
+EndTransform = PredictFeetLocationArray[FootIndex]
+
+Alpha = SwingTimeAsAPercent.Remap(0, PerFootCyclePercentArray[FootIndex], 0, 1)
+
+###### CalculateFootSpline函数节点
+
+![1774409103493](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260325154345763-121422232.png)
+
+返回值：OutputTransform
+
+OutputTransform.Rotation = Interpolate(`StartingTransform`.Rotation, `EndTransform`.Rotation, 0.5)
+
+OutputTransform.Translation = PositionFromSpline(SplineFromPoints,Alpha)
+
+SplineFromPoints的7个点位
+
+* `StartingTransform`
+* `InsertPoint1` = CalculateOffsetPoint(StartPoint=`StartingTransform`, FwdOrBwd=-1, TargetMaximum=30)
+* `InsertPoint2` = `InsertPoint1` + FVector( 0,0,RigSpaceVelocity.Length.Remap(0,300,0,50) )
+* `FinalInsertPoint3` = (Distance(`StartingTransform`,`EndTransform`) < 5)? InsertPoint3_Idle: InsertPoint3_Move_ByFootAvoidance
+* `InsertPoint4` = InsertPoint2 + FVector( 0,0,RigSpaceVelocity.Length.Remap(0,300,0,30) )
+* `InsertPoint5` = CalculateOffsetPoint(StartPoint= `StartingTransform`, FwdOrBwd=1, TargetMaximum=30)
+* `EndTransform`
+
+> 其中，
+>
+> CalculateOffsetPoint的逻辑为：
+>
+> Return StartPoint + RigSpaceVelocity.Unit × FwdOrBwd × RigSpaceVelocity.Length.Remap(0,300,0,TargetMaximum)
+
+InsertPoint3_Idle = Interpolate(`InsertPoint2`, `InsertPoint4`, 0.5)
+
+InsertPoint3_Move_ByFootAvoidance = FootAvoidance( IdeaLocation=InsertPoint3_Move )
+
+InsertPoint3_Move.XY = 脚部绕着盆骨旋转MovementAngleOffset
+
+InsertPoint3_Move.Z = InsertPoint3_Idle.Z
+
+###### FootAvoidance函数节点
+
+```cpp
+#pragma region 避免脚部交叉
+	//避免脚部交叉
+	USTRUCT(meta = (DisplayName = "FootAvoidance"), Category = "CalculateFootTargetTransform")
+	struct PROCEDURALANIM_API FRigUnit_FootAvoidance : public FRigUnit
+	{
+		GENERATED_BODY()
+
+		RIGVM_METHOD()
+		virtual void Execute() override;
+
+		UPROPERTY(meta = (Input))
+		FVector IdeaLocation;
+		UPROPERTY(meta = (Input))
+		int FootIndex;
+		UPROPERTY(meta = (Input))
+		FQuat MovementAngleOffset;
+		UPROPERTY(meta = (Input))
+		TArray<FTransform> SavedFootPlatformArray;
+
+		UPROPERTY(meta = (Output))
+		FVector ModifiedLocation;
+	};
+#pragma endregion
+```
+
+```cpp
+#pragma region 避免脚部交叉
+FRigUnit_FootAvoidance_Execute()
+{
+	//前后移动方向矢量
+	FVector MoveAngleVector = MovementAngleOffset.RotateVector(FVector::UnitY());
+
+	//指向身体两侧的矢量
+	FVector BodySideVector = AnimationCore::QuatFromEuler(FVector(0,0,90)).RotateVector(MoveAngleVector);
+
+
+	//对侧脚踩位置相距身体两侧偏移多少
+	float OppositeFootBodySideOffset = SavedFootPlatformArray[(FootIndex==0)? 1: 0].GetTranslation().Dot(BodySideVector);
+	//左脚需要偏移的量
+	float LeftFootOffset = FMath::Min(IdeaLocation.Dot(BodySideVector), OppositeFootBodySideOffset-15);
+	//右脚需要偏移的量
+	float RightFootOffset = FMath::Max(IdeaLocation.Dot(BodySideVector), OppositeFootBodySideOffset+15);
+	//身体两侧方向上需要避开多少
+	FVector BodySideAvoidOffset = BodySideVector*( (FootIndex==0)? LeftFootOffset: RightFootOffset );
+
+	//移动方向上需要避开多少
+	FVector MoveAngleAvoidOffset = MoveAngleVector * ( IdeaLocation.Dot(MoveAngleVector) );
+
+	//最终输出的位置
+	ModifiedLocation.X = (BodySideAvoidOffset+MoveAngleAvoidOffset).X;
+	ModifiedLocation.Y = (BodySideAvoidOffset+MoveAngleAvoidOffset).Y;
+	ModifiedLocation.Z = IdeaLocation.Z;
+}
+#pragma endregion
+```
+
+###### 更新Lock/UnLock状态
+
+IsFootLockedArray[FootIndex] = (PerFootCyclePercentArray[FootIndex] > SwingTimeAsAPercent)
+
+###### 根据Lock/UnLock状态，更新脚部位置锁定数组
+
+```cpp
+if(IsFootLockedArray[FootIndex])
+{
+	LockedFeetLocationArray[FootIndex] = TempFootPlatform;
+}
+```
+
+###### 返回值
+
+TempFootPlatform.Tanslation.Z.Clamp(-30,40)
+
+Return TempFootPlatform
+
+#### 设置脚的前后偏移量SetFootTransforms
+
+![1774426496050](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260325181634282-803179272.png)
+
+##### Rig引用
+
+![1774424709926](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260325181634923-1606539645.png)
+
+##### 设置脚部向前偏移量FootForwardOffset
+
+FootForwardOffset = (TargetFootPlatform.Translation - ThighRig.Translation).Dot( MovementAngleOffset.RotateVector(0,1,0) )
+
+##### 脚部放置
+
+向上偏移保证脚踩在地面
+
+```cpp
+FootRig.SetTransfrom( 
+		FootRig.Rotation, 
+		TargetFootPlatform.Translation + FVector(0,0,9), 
+		FootRig.Scale3D 
+		)
+```
+
+##### 脚前掌旋转偏移点(脚部局部坐标)BallRotationOffsetPoint
+
+![1774428787264](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260325181635758-1193113677.png)
+
+##### 脚尖旋转偏移点(脚掌局部坐标)TipRotationOffsetPoint
+
+![1774429125820](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260325181636243-1754745384.png)
+
+> Ball的世界坐标BallPosition
+
+BallPosition = BallRotationOffsetPoint × FootRig
+
+> 脚底向前移动的向量BallFwdVector
+
+BallFwdVector = ( (BallRig.Translation - FootRig.Translation).XY.Unit ) × 5.8
+
+##### 脚后跟旋转偏移点(脚部局部坐标)HeelRotationOffsetPoint
+
+![1774429338037](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260325181636697-1027601821.png)
+
+> 脚后跟的位置HeelPosition
+
+HeelPosition = ( FootRig.Translation - FVector(0,0,9) ) + BallFwdVector×(-0.8)
+
+##### 腿在身后时，脚先绕着脚前掌旋转，再绕脚尖旋转
+
+> Remap输入范围(-40,-10)和(-70,-40)
+
+###### 脚部绕着脚前掌旋转
+
+![1774430872474](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260325181637221-1796305417.png)
+
+> 绕着脚前掌旋转量RotationAroundBall
+
+FQuat RotationAroundBall = FromEuler( FootForwardOffset.Remap(-40,-10,-40,0) );
+
+###### 取消脚前掌Ball自身的旋转
+
+![1774430886252](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260325181637741-916681290.png)
+
+###### 脚部绕着脚尖旋转
+
+![1774431056928](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260325181638252-1604980620.png)
+
+> 绕着脚尖旋转量RotationAroundTip
+
+FQuat RotationAroundTip = FromEuler( ForwardOffset.Remap(-70,-40,-50,0) );
+
+##### 腿在前面时，脚部绕着脚后跟旋转
+
+> Remap输入范围(15,70)
+
+![1774431261426](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260325181638758-1300590331.png)
+
+> 绕着脚后跟旋转量RotationAroundHeel
+
+FQuat RotationAroundHeel = FromEuler( ForwardOffset.Remap(15,70,0,40) );
+
+##### 最后脚部整体旋转：绕着脚踩处FootPlatform旋转脚部
+
+![1774431636332](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260325181639244-2132324653.png)
+
+#### 手部运动
+
+##### Rig引用
+
+![1774431797297](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260325181639747-124831521.png)
+
+##### 保存Hand的局部变换
+
+![1774432011118](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260325181640242-269363302.png)
+
+##### Hand绕着UpperArm旋转，同步FootSwing
+
+
+##### 恢复Hand的局部变换
+
+![1774432031224](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260325181640740-1939353486.png)

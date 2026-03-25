@@ -2,6 +2,8 @@
 #include "CoreMinimal.h"
 #include "ControlRig/Public/Rigs/RigHierarchy.h"
 #include "AnimationCoreLibrary.h"
+#include "VectorTypes.h"
+#include "Dataflow/DataflowMathNodes.h"
 #include "RigVMFunctions/Animation/RigVMFunction_GetDeltaTime.h"
 #include "RigVMFunctions/Math/RigVMFunction_MathQuaternion.h"
 #include "RigVMFunctions/Math/RigVMFunction_MathVector.h"
@@ -392,4 +394,34 @@ FRigUnit_CalculatePerFootRotationFactor_Execute()
 		FootRotationFactor = 0.9;
 	}
 }
+#pragma endregion
+
+
+#pragma region 避免脚部交叉
+FRigUnit_FootAvoidance_Execute()
+{
+	//前后移动方向矢量
+	FVector MoveAngleVector = MovementAngleOffset.RotateVector(FVector::UnitY());
+	
+	//指向身体两侧的矢量
+	FVector BodySideVector = AnimationCore::QuatFromEuler(FVector(0,0,90)).RotateVector(MoveAngleVector);
+
+
+	//对侧脚踩位置相距身体两侧偏移多少
+	float OppositeFootBodySideOffset = SavedFootPlatformArray[(FootIndex==0)? 1: 0].GetTranslation().Dot(BodySideVector);
+	//左脚需要偏移的量
+	float LeftFootOffset = FMath::Min(IdeaLocation.Dot(BodySideVector), OppositeFootBodySideOffset-15);
+	//右脚需要偏移的量
+	float RightFootOffset = FMath::Max(IdeaLocation.Dot(BodySideVector), OppositeFootBodySideOffset+15);
+	//身体两侧方向上需要避开多少
+	FVector BodySideAvoidOffset = BodySideVector*( (FootIndex==0)? LeftFootOffset: RightFootOffset );
+
+	//移动方向上需要避开多少
+	FVector MoveAngleAvoidOffset = MoveAngleVector * ( IdeaLocation.Dot(MoveAngleVector) );
+
+	//最终输出的位置
+	ModifiedLocation.X = (BodySideAvoidOffset+MoveAngleAvoidOffset).X;
+	ModifiedLocation.Y = (BodySideAvoidOffset+MoveAngleAvoidOffset).Y;
+	ModifiedLocation.Z = IdeaLocation.Z;
+}	
 #pragma endregion

@@ -311,3 +311,28 @@ struct PROCEDURALANIM_API FRigUnit_CalculatePerFootRotationFactor : public FRigU
 	float FootRotationFactor;
 };
 #pragma endregion
+
+
+#pragma region 避免脚部交叉
+	//避免脚部交叉
+	USTRUCT(meta = (DisplayName = "FootAvoidance"), Category = "CalculateFootTargetTransform")
+	struct PROCEDURALANIM_API FRigUnit_FootAvoidance : public FRigUnit
+	{
+		GENERATED_BODY()
+
+		RIGVM_METHOD()
+		virtual void Execute() override;
+		
+		UPROPERTY(meta = (Input))
+		FVector IdeaLocation;
+		UPROPERTY(meta = (Input))
+		int FootIndex;
+		UPROPERTY(meta = (Input))
+		FQuat MovementAngleOffset;
+		UPROPERTY(meta = (Input))
+		TArray<FTransform> SavedFootPlatformArray;
+
+		UPROPERTY(meta = (Output))
+		FVector ModifiedLocation;
+	};
+#pragma endregion
