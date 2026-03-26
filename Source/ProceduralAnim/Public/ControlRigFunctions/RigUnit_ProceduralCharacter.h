@@ -228,8 +228,8 @@ static FTransform InterpolateTransform(const FTransform& A, const FTransform& B,
 
 #pragma region 计算肩膀的晃动偏移
 //计算肩膀的晃动偏移
-USTRUCT(meta = (DisplayName = "GetClavicleOffset"), Category = "ArmMotion")
-struct PROCEDURALANIM_API FRigUnit_GetClavicleOffset : public FRigUnit
+USTRUCT(meta = (DisplayName = "GetClavicleZOffset"), Category = "ArmMotion")
+struct PROCEDURALANIM_API FRigUnit_GetClavicleZOffset : public FRigUnit
 {
 	GENERATED_BODY()
 
@@ -243,7 +243,7 @@ struct PROCEDURALANIM_API FRigUnit_GetClavicleOffset : public FRigUnit
 	float MasterCyclePercent;
 
 	UPROPERTY(meta = (Output))
-	FVector ClavicleOffset;
+	float ClavicleZOffset;
 };
 #pragma endregion
 
@@ -335,4 +335,26 @@ struct PROCEDURALANIM_API FRigUnit_CalculatePerFootRotationFactor : public FRigU
 		UPROPERTY(meta = (Output))
 		FVector ModifiedLocation;
 	};
+#pragma endregion
+
+#pragma region 脚部的Z轴旋转受移动角度偏移限制，也就是左右旋转限制
+//脚部的Z轴旋转受移动角度偏移限制，也就是左右旋转限制
+USTRUCT(meta = (DisplayName = "LimitRotationAroundZ"), Category = "CalculateFootTargetTransform")
+struct PROCEDURALANIM_API FRigUnit_LimitRotationAroundZ : public FRigUnit
+{
+	GENERATED_BODY()
+
+	RIGVM_METHOD()
+	virtual void Execute() override;
+		
+	UPROPERTY(meta = (Input))
+	FQuat InRotation;
+	UPROPERTY(meta = (Input))
+	FQuat MovementAngleOffset;
+	UPROPERTY(meta = (Input))
+	float FootRotationFactor;
+
+	UPROPERTY(meta = (Output))
+	FQuat LimitedRotation;
+};
 #pragma endregion

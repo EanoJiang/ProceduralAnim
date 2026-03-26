@@ -9,6 +9,7 @@
 #include "RigVMFunctions/Math/RigVMFunction_MathVector.h"
 #include "RigVMFunctions/Math/RigVMMathLibrary.h"
 #include "Transform/TransformableHandleUtils.h"
+#include "Units/Deprecated/Math/RigUnit_Float.h"
 
 #pragma region SetupArray
 FRigUnit_SetupArray_Execute()
@@ -284,19 +285,18 @@ FVector VectorLerpIndependentOnFrameRate(FVector InVector, FVector TargetVector,
 #pragma endregion
 
 
-#pragma region 计算肩膀的晃动偏移
-FRigUnit_GetClavicleOffset_Execute()
+#pragma region 计算肩膀的晃动偏移量
+FRigUnit_GetClavicleZOffset_Execute()
 {
-	const float ClavicleZOffset = sin(2 * PI * 2 * (MasterCyclePercent-0.25) )
+	ClavicleZOffset = sin(2 * PI * 2 * (MasterCyclePercent-0.25) )
 									* MathFloatRemap(
 										RigSpaceVelocity.Length(),
 										0,
 										300,
 										0,
-										2,
+										1.5,
 										true
 										) ;
-	ClavicleOffset = FVector(0, 0, ClavicleZOffset);
 }
 #pragma endregion
 
@@ -424,4 +424,22 @@ FRigUnit_FootAvoidance_Execute()
 	ModifiedLocation.Y = (BodySideAvoidOffset+MoveAngleAvoidOffset).Y;
 	ModifiedLocation.Z = IdeaLocation.Z;
 }	
+#pragma endregion
+
+
+#pragma region 脚部的Z轴旋转受移动角度偏移限制，也就是左右旋转限制
+//脚部的Z轴旋转受移动角度偏移限制，也就是左右旋转限制
+FRigUnit_LimitRotationAroundZ_Execute()
+{
+	float MovementAngleAroundZAxis = AnimationCore::EulerFromQuat(MovementAngleOffset * FootRotationFactor).Z;
+	FVector LimitedRotationVector;
+	LimitedRotationVector.X = AnimationCore::EulerFromQuat(InRotation).X;
+	LimitedRotationVector.Y = AnimationCore::EulerFromQuat(InRotation).Y;
+	LimitedRotationVector.Z = FMath::Clamp(
+										AnimationCore::EulerFromQuat(InRotation).Z,
+										MovementAngleAroundZAxis - 25,
+										MovementAngleAroundZAxis + 25
+										);
+	LimitedRotation = AnimationCore::QuatFromEuler(LimitedRotationVector);
+}
 #pragma endregion

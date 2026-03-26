@@ -568,17 +568,60 @@ Clamp限制前的结果 = LockedFeetLocationArray[FootIndex] × WorldDeltaTransf
 
 LockedFeetLocationArray[FootIndex].Translation = Clamp限制前的结果.Translation.ClampSpatially(0,100)
 
-LockedFeetLocationArray[FootIndex].Rotation.XY = Clamp限制前的结果.Rotation.XY
+LockedFeetLocationArray[FootIndex].Rotation = LimitRotationAroundZ( Clamp限制前的结果.Rotation )
 
-LockedFeetLocationArray[FootIndex].Rotation.Z = Clamp限制前的结果.Rotation.Z.绕Z轴旋转受MovementAngleOffset限制
-
-> 限制：
+> LimitRotationAroundZ节点：
 >
-> Clamp限制前的结果.Rotation.Z.Clamp(Min,Max)
+> ```cpp
+> #pragma region 脚部的Z轴旋转受移动角度偏移限制，也就是左右旋转限制
+> //脚部的Z轴旋转受移动角度偏移限制，也就是左右旋转限制
+> USTRUCT(meta = (DisplayName = "LimitRotationAroundZ"), Category = "CalculateFootTargetTransform")
+> struct PROCEDURALANIM_API FRigUnit_LimitRotationAroundZ : public FRigUnit
+> {
+> 	GENERATED_BODY()
 >
-> Min = (MovementAngleOffset×FootRotationFactor).Z - 25
+> 	RIGVM_METHOD()
+> 	virtual void Execute() override;
 >
-> Max= (MovementAngleOffset×FootRotationFactor).Z + 25
+> 	UPROPERTY(meta = (Input))
+> 	FQuat InRotation;
+> 	UPROPERTY(meta = (Input))
+> 	FQuat MovementAngleOffset;
+> 	UPROPERTY(meta = (Input))
+> 	float FootRotationFactor;
+>
+> 	UPROPERTY(meta = (Output))
+> 	FQuat LimitedRotation;
+> };
+> #pragma endregion
+> ```
+>
+> ```cpp
+> #pragma region 脚部的Z轴旋转受移动角度偏移限制，也就是左右旋转限制
+> //脚部的Z轴旋转受移动角度偏移限制，也就是左右旋转限制
+> FRigUnit_LimitRotationAroundZ_Execute()
+> {
+> 	// float MovementAngleAroundZAxis = AnimationCore::EulerFromQuat(MovementAngleOffset * FootRotationFactor).Z;
+> 	// Rotation.Z = FMath::Clamp(
+> 	// 	Rotation.Z,
+> 	// 	MovementAngleAroundZAxis - 25,
+> 	// 	MovementAngleAroundZAxis + 25
+> 	// 	);
+>
+> 	float MovementAngleAroundZAxis = AnimationCore::EulerFromQuat(MovementAngleOffset * FootRotationFactor).Z;
+> 	FVector LimitedRotationVector;
+> 	LimitedRotationVector.X = AnimationCore::EulerFromQuat(InRotation).X;
+> 	LimitedRotationVector.Y = AnimationCore::EulerFromQuat(InRotation).Y;
+> 	LimitedRotationVector.Z = FMath::Clamp(
+> 										AnimationCore::EulerFromQuat(InRotation).Z,
+> 										MovementAngleAroundZAxis - 25,
+> 										MovementAngleAroundZAxis + 25
+> 										);
+> 	LimitedRotation = AnimationCore::QuatFromEuler(LimitedRotationVector);
+>
+> }
+> #pragma endregion
+> ```
 
 TempFootPlatform = LockedFeetLocationArray[FootIndex]
 
@@ -806,9 +849,262 @@ FQuat RotationAroundHeel = FromEuler( ForwardOffset.Remap(15,70,0,40) );
 
 ![1774432011118](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260325181640242-269363302.png)
 
-##### Hand绕着UpperArm旋转，同步FootSwing
+##### HandEffector：Hand绕着UpperArm旋转，旋转量同步FootSwing
 
+![1774492797071](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260326115558853-220380605.png)
+
+> Hand.Translation加一个基于移动速度的z轴的偏移量
+
+AddHandZOffset函数节点：
+
+```cpp
+#pragma region ArmMotion时给Hand加一个基于移动速度的Z轴偏移量
+//ArmMotion时给Hand加一个基于移动速度的Z轴偏移量
+USTRUCT(meta = (DisplayName = "AddHandZOFfset"), Category = "ArmMotion")
+struct PROCEDURALANIM_API FRigUnit_AddHandZOffset : public FRigUnit
+{
+GENERATED_BODY()
+
+RIGVM_METHOD()
+virtual void Execute() override;
+
+UPROPERTY(meta = (Input))
+FVector InTranslation;
+
+UPROPERTY(meta = (Input))
+FVector RigSpaceVelocity;
+
+UPROPERTY(meta = (Output))
+FVector OutTranslation;
+    };
+#pragma endregion
+```
+
+```cpp
+#pragma region ArmMotion时给Hand加一个基于移动速度的Z轴偏移量
+	FRigUnit_AddHandZOffset_Execute()
+	{
+		const float ZOffset = MathFloatRemap(
+			RigSpaceVelocity.Length(),
+			0,
+			300,
+			0,
+			12,
+			true
+			);
+		const FVector Offset = FVector(0, 0, ZOffset);
+		OutTranslation = InTranslation + Offset;
+	}
+#pragma endregion
+```
+
+> 旋转量
+
+GetArmMotionEffectorRotationAmount函数节点：
+
+```cpp
+#pragma region 计算ArmMotion的Effector的RotationAmount值
+	//计算ArmMotion的Effector的RotationAmount值
+	USTRUCT(meta = (DisplayName = "GetArmMotionEffectorRotationAmount"), Category = "ArmMotion")
+	struct PROCEDURALANIM_API FRigUnit_GetArmMotionEffectorRotationAmount : public FRigUnit
+	{
+		GENERATED_BODY()
+
+		RIGVM_METHOD()
+		virtual void Execute() override;
+
+		UPROPERTY(meta = (Input))
+		TArray<float> PerFootCyclePercentArray;
+
+		UPROPERTY(meta = (Input))
+		int ArmIndex;
+
+		UPROPERTY(meta = (Input))
+		FVector RigSpaceVelocity;
+
+		UPROPERTY(meta = (Input))
+		FQuat MovementAngleOffset;
+
+		UPROPERTY(meta = (Output))
+		FQuat RotateAmount;
+	};
+
+	float MathFloatRemap(float Value, float SourceMinimum, float SourceMaximum, float TargetMinimum, float TargetMaximum, bool bClamp);
+
+	FQuat MathQuaternionScale(FQuat Value, float Scale);
+
+#pragma endregion
+```
+
+```cpp
+#pragma region 计算ArmMotion的Effector的RotationAmount值
+	FRigUnit_GetArmMotionEffectorRotationAmount_Execute()
+	{
+		const float PerFootCyclePercent = PerFootCyclePercentArray[ArmIndex];
+		//摆动的正负号(向后摆动时需要乘-1)
+		const float ArmSwingSign = FVector::DotProduct(
+			RigSpaceVelocity.GetSafeNormal(),
+			MathQuaternionScale(MovementAngleOffset, 0.4).RotateVector(FVector(0,1,0) )
+			);
+		//向后摆动时的幅度小一些
+		const float ArmSwingSignClamp = FMath::Clamp(ArmSwingSign,-0.5,1);
+		//摆动的幅度
+		const float ArmSwingAmplitude = MathFloatRemap(
+										RigSpaceVelocity.Length(),
+										0,
+										300,
+										0,
+										50,
+										true
+										)
+										* FMath::Clamp(FMath::Abs(RigSpaceVelocity.Dot(FVector(0,0.4,0))), 0.4, 1);
+		//摆动的中轴向前偏移量
+		const float ArmSwingAxisOffset = MathFloatRemap(
+										RigSpaceVelocity.Length(),
+										0,
+										300,
+										0,
+										15,
+										true
+										);
+		//Sign * ArmSwingAmplitude * sin( 2Π * (PerFootCyclePercent+0.15)%1 ) + ArmSwingAxisOffset
+		const float ArmSwingCurve = sin(2 * UE_PI * FMath::Fmod(PerFootCyclePercent + 0.15f, 1.0f))
+									* ArmSwingSignClamp
+									* ArmSwingAmplitude
+									+ ArmSwingAxisOffset;
+
+		RotateAmount = AnimationCore::QuatFromEuler(FVector(ArmSwingCurve, 0, 0));
+	}
+
+	float MathFloatRemap(float Value, float SourceMinimum, float SourceMaximum, float TargetMinimum, float TargetMaximum, bool bClamp)
+	{
+		float Result = 0.f;
+		float Ratio = 0.f;
+		if (FMath::IsNearlyEqual(SourceMinimum, SourceMaximum))
+		{
+			Ratio = 0.f;
+		}
+		else
+		{
+			Ratio = (Value - SourceMinimum) / (SourceMaximum - SourceMinimum);
+		}
+		if (bClamp)
+		{
+			Ratio = FMath::Clamp<float>(Ratio, 0.f, 1.f);
+		}
+		Result = FMath::Lerp<float>(TargetMinimum, TargetMaximum, Ratio);
+		return Result;
+	}
+
+	FQuat MathQuaternionScale(FQuat Value, float Scale)
+	{
+		FVector Axis = FVector::ZeroVector;
+		float Angle = 0.f;
+		Value.ToAxisAndAngle(Axis, Angle);
+		Value = FQuat(Axis, Angle * Scale);
+		return Value;
+	}
+#pragma endregion
+```
+
+##### 手肘位置ElbowVector
+
+> 手肘位置 = Lower- Hand和Upper的中点
+
+ElbowVector = LowerArmRig - Interpolate(HandRig, UpperArmRig, 0.5)
+
+##### BasicIK
+
+![1774493074383](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260326115559573-1806617297.png)
+
+> 主次轴：PrimaryAxis和SecondaryAxis
+
+GetArmMotionAxisData函数节点：
+
+```cpp
+#pragma region 计算ArmMotion的主次轴朝向数据
+	//计算ArmMotion的主次轴朝向数据
+	USTRUCT(meta = (DisplayName = "GetArmMotionAxisData"), Category = "ArmMotion")
+	struct PROCEDURALANIM_API FRigUnit_GetArmMotionAxisData : public FRigUnit
+	{
+		GENERATED_BODY()
+
+		RIGVM_METHOD()
+		virtual void Execute() override;
+
+		UPROPERTY(meta = (Input))
+		int ArmIndex = 0;
+
+		UPROPERTY(meta = (Output))
+		FVector PrimaryAxis = FVector(1, 0, 0) ;
+
+		UPROPERTY(meta = (Output))
+		FVector SecondaryAxis = FVector(0, -1, 0);
+	};
+#pragma endregion
+```
+
+```cpp
+#pragma region 计算ArmMotion的主次轴朝向数据
+	FRigUnit_GetArmMotionAxisData_Execute()
+	{
+		//右骨骼朝向是反的，因此Index不为0时需要反向
+		PrimaryAxis   = (ArmIndex == 0) ? FVector(1, 0, 0) : FVector(-1, 0, 0);
+		SecondaryAxis = (ArmIndex == 0) ? FVector(0, -1, 0) : FVector(0, 1, 0);
+	}
+#pragma endregion
+```
 
 ##### 恢复Hand的局部变换
 
 ![1774432031224](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260325181640740-1939353486.png)
+
+##### 肩膀上下晃动
+
+![1774493528331](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260326115600165-807404538.png)
+
+> 肩膀z轴晃动偏移量
+
+GetClavicleZOffset函数节点：
+
+```cpp
+#pragma region 计算肩膀的晃动偏移
+//计算肩膀的晃动偏移
+USTRUCT(meta = (DisplayName = "GetClavicleZOffset"), Category = "ArmMotion")
+struct PROCEDURALANIM_API FRigUnit_GetClavicleZOffset : public FRigUnit
+{
+	GENERATED_BODY()
+
+	RIGVM_METHOD()
+	virtual void Execute() override;
+
+	UPROPERTY(meta = (Input))
+	FVector RigSpaceVelocity;
+
+	UPROPERTY(meta = (Input))
+	float MasterCyclePercent;
+
+	UPROPERTY(meta = (Output))
+	float ClavicleZOffset;
+};
+#pragma endregion
+```
+
+```cpp
+#pragma region 计算肩膀的晃动偏移量
+FRigUnit_GetClavicleZOffset_Execute()
+{
+	ClavicleZOffset = sin(2 * PI * 2 * (MasterCyclePercent-0.25) )
+									* MathFloatRemap(
+										RigSpaceVelocity.Length(),
+										0,
+										300,
+										0,
+										1.5,
+										true
+										) ;
+}
+#pragma endregion
+```
+
+#### 身体偏移OffsetPelvis
