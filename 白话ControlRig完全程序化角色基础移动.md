@@ -1108,3 +1108,343 @@ FRigUnit_GetClavicleZOffset_Execute()
 ```
 
 #### 身体偏移OffsetPelvis
+
+##### 用轨迹追踪Z轴偏移量PreviousZTraceOffset
+
+PreviousZTraceOffset = VectorLerp( PreviousZTraceOffset, GetMinHeightFootPlatform(), 5)
+
+> GetMinHeightFootPlatform函数节点：
+>
+> 左右脚Platform分别做SphereTrace检测，找到最低平台高度
+>
+> ![1774510917430](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260326191913413-1764770796.png)
+
+##### 保存OffsetPelvis之前的脚部Transform
+
+![1774510947086](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260326191914042-1351903511.png)
+
+##### 盆骨偏移
+
+###### 盆骨朝向PelvisRotation
+
+PelvisRotation = CalculatePelvisRotation(RigSpaceVelocity)
+
+> CalculatePelvisRotation函数节点：
+>
+> ```cpp
+> #pragma region 盆骨朝向
+> 	//盆骨朝向：左脚在前顺时针旋转，右脚在前逆时针旋转
+> 	USTRUCT(meta = (DisplayName = "CalculatePelvisRotation"), Category = "OffsetPelvis")
+> 	struct PROCEDURALANIM_API FRigUnit_CalculatePelvisRotation : public FRigUnit
+> 	{
+> 		GENERATED_BODY()
+>
+> 		RIGVM_METHOD()
+> 		virtual void Execute() override;
+>
+> 		UPROPERTY(meta = (Input))
+> 		FVector RigSpaceVelocity;
+>
+> 		UPROPERTY(Transient)
+> 		TArray<FTransform> SavedFootPlatformArray;
+>
+> 		UPROPERTY(meta = (Input))
+> 		FQuat MovementAngleOffset;
+>
+> 		UPROPERTY(meta = (Output))
+> 		FQuat Result;
+>
+> 	};
+> #pragma endregion
+> ```
+>
+> ```cpp
+> #pragma region 盆骨朝向
+> //盆骨朝向：左脚在前顺时针旋转，右脚在前逆时针旋转
+> FRigUnit_CalculatePelvisRotation_Execute()
+> {
+> 	//比较哪个脚在前：脚的位置在移动方向上的投影值
+> 	float FootProjectionOnMoveDir = FVector::DotProduct(
+> 		SavedFootPlatformArray[0].GetTranslation() - SavedFootPlatformArray[1].GetTranslation(),
+> 		MovementAngleOffset.RotateVector(FVector::UnitY())
+> 		);
+> 	//绕z轴的旋转量 = 速度映射 × 脚的位置在移动方向上的投影值
+> 	float RotationAroundZAxis = MathFloatRemap(
+> 		RigSpaceVelocity.Length(),
+> 		100,
+> 		300,
+> 		0,
+> 		0.2,
+> 		true
+> 		) * FootProjectionOnMoveDir;
+> 	Result = AnimationCore::QuatFromEuler(FVector(0,0,RotationAroundZAxis));
+> }
+> #pragma endregion
+> ```
+
+###### 盆骨自旋转
+
+![1774515198453](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260326191914564-839951691.png)
+
+> 盆骨上下起伏偏移量
+>
+> GetPelvisZOffsetBasedOnVelocity函数节点：
+>
+> ```cpp
+> #pragma region 盆骨上下起伏偏移量
+> 	//盆骨上下起伏偏移量
+> 	USTRUCT(meta = (DisplayName = "AddPelvisZOffset"), Category = "OffsetPelvis")
+> 	struct PROCEDURALANIM_API FRigUnit_AddPelvisZOffset : public FRigUnit
+> 	{
+> 		GENERATED_BODY()
+>
+> 		RIGVM_METHOD()
+> 		virtual void Execute() override;
+>
+> 		UPROPERTY(meta = (Input, Output))
+> 		FVector Translation;
+>
+> 		UPROPERTY(meta = (Input))
+> 		float MasterCyclePercent;
+>
+> 		UPROPERTY(meta = (Input))
+> 		FVector RigSpaceVelocity;
+>
+> 		UPROPERTY(meta = (Input))
+> 		float PreviousZTraceOffset;
+> 	};
+> #pragma endregion
+> ```
+>
+> ```cpp
+> #pragma region 盆骨上下起伏偏移量
+> 	FRigUnit_AddPelvisZOffset_Execute()
+> 	{
+> 		//ZOffset = 速度映射 * sin(2Π * 2 * MasterCyclePercent)
+> 		float ZOffset = MathFloatRemap(
+> 			RigSpaceVelocity.Length(),
+> 			0,
+> 			300,
+> 			0,
+> 			5,
+> 			true)
+> 			* sin(2 * PI * MasterCyclePercent * 2)
+> 			+ PreviousZTraceOffset;
+> 		Translation += FVector(0,0,ZOffset);
+> 	}
+> #pragma endregion
+> ```
+
+##### 肩膀自旋转RotateSpine
+
+![1774515437912](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260326191915126-1125378755.png)
+
+###### RotateSpine节点
+
+旋转总量/3 分给每一个Spine进行RotateSingleBone
+
+![1774515489925](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260326191915714-1888233954.png)
+
+> RotateSingleBone节点：自旋转
+>
+> ![1774515576324](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260326191916262-1973778036.png)
+
+##### 基于速度的身体前后倾斜PelvisLean
+
+PelvisLean函数节点
+
+```cpp
+#pragma region 身体前后倾斜
+//身体前后倾斜
+USTRUCT(meta = (DisplayName = "PelvisLean"), Category = "OffsetPelvis")
+struct PROCEDURALANIM_API FRigUnit_PelvisLean : public FRigUnit_DynamicHierarchyBaseMutable
+{
+	GENERATED_BODY()
+
+	RIGVM_METHOD()
+	virtual void Execute() override;
+
+	UPROPERTY(meta = (Input))
+	FVector RigSpaceVelocity;
+	
+};
+#pragma endregion
+```
+
+```cpp
+#pragma region 身体前后倾斜
+	FRigUnit_PelvisLean_Execute()
+{
+	URigHierarchy* Hierarchy = ExecuteContext.Hierarchy;
+	if(!Hierarchy)
+	{
+		return;
+	}
+
+	FRigElementKey PelvisRig = FRigElementKey(TEXT("pelvis"), ERigElementType::Bone);
+	FTransform TransformToRotate = Hierarchy->GetGlobalTransform(PelvisRig);
+	FVector PointToRotateAround = TransformToRotate.GetTranslation();
+
+	float LeanRotateAmount = MathFloatRemap(
+		RigSpaceVelocity.Length(),
+		0,
+		300,
+		0,
+		-15,
+		true
+		);
+	float RigSpaceVelocityYProjection = RigSpaceVelocity.GetSafeNormal().Dot(FVector::UnitY());
+	float LeanRotateAmountAroundX = LeanRotateAmount * RigSpaceVelocityYProjection;
+	//基于速度的前后旋转量(绕x轴)
+	FQuat RotateAmount = AnimationCore::QuatFromEuler(FVector(LeanRotateAmountAroundX, 0, 0));
+	//Pelvis自旋转后的Transform
+	FTransform ModifiedTransform = RotateAroundPoint(TransformToRotate, PointToRotateAround, RotateAmount);
+
+
+	float LeanOffsetAmount = MathFloatRemap(
+		RigSpaceVelocity.Length(),
+		0,
+		300,
+		0,
+		10,
+		true
+		);
+	// 基于速度的前后位置偏移量(y轴)
+	float LeanOffsetAmountOnY =	LeanOffsetAmount * RigSpaceVelocityYProjection;
+	ModifiedTransform.AddToTranslation(FVector(0, LeanOffsetAmountOnY, 0));
+
+	//最终倾斜后的Pelvis
+	FTransform FinalPelvis;
+	FinalPelvis.SetRotation(ModifiedTransform.GetRotation());
+	FinalPelvis.SetTranslation(ModifiedTransform.GetTranslation());
+	FinalPelvis.SetScale3D(ModifiedTransform.GetScale3D());
+
+	Hierarchy->SetGlobalTransform(PelvisRig, FinalPelvis);
+}
+#pragma endregion
+```
+
+##### 盆骨侧倾
+
+![1774520023068](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260326191916808-1177920230.png)
+
+> PelvisSideLean函数节点
+
+```cpp
+#pragma region 盆骨侧倾
+	//盆骨侧倾
+	USTRUCT(meta = (DisplayName = "PelvisSideLean"), Category = "OffsetPelvis")
+	struct PROCEDURALANIM_API FRigUnit_PelvisSideLean : public FRigUnit_DynamicHierarchyBaseMutable
+	{
+		GENERATED_BODY()
+
+		RIGVM_METHOD()
+		virtual void Execute() override;
+
+		UPROPERTY(meta = (Input))
+		TArray<FTransform> SavedFootPlatformArray;
+
+		UPROPERTY(meta = (Output))
+		FQuat OutPelvisTiltRotateAmount;
+	};
+#pragma endregion
+```
+
+```cpp
+#pragma region 盆骨侧倾
+	FRigUnit_PelvisSideLean_Execute()
+	{
+		URigHierarchy* Hierarchy = ExecuteContext.Hierarchy;
+		if(!Hierarchy)
+		{
+			return;
+		}
+
+		//脚踩高度 = 脚部位置在Z轴的投影值
+		float FootPlatformHeight = FVector::DotProduct(
+			SavedFootPlatformArray[0].GetTranslation() - SavedFootPlatformArray[1].GetTranslation(),
+			FVector::UnitZ()
+			);
+		//基于不同脚部高度的盆骨侧倾旋转量：绕着y轴旋转
+		float PelvisSideLeanRotateValue= MathFloatRemap(
+			FootPlatformHeight,
+			-60,
+			60,
+			-7,
+			7,
+			true
+			);
+		FQuat PelvisSideLeanRotateAmount = AnimationCore::QuatFromEuler( FVector(0, PelvisSideLeanRotateValue, 0) );
+
+		//盆骨绕着y轴自旋转
+		FRigElementKey PelvisRig = FRigElementKey(TEXT("pelvis"), ERigElementType::Bone);
+		FTransform TransformToRotate = Hierarchy->GetGlobalTransform(PelvisRig);
+		FVector PointToRotateAround = TransformToRotate.GetTranslation();
+		FTransform ModifiedTransform = RotateAroundPoint(TransformToRotate, PointToRotateAround, PelvisSideLeanRotateAmount);
+		Hierarchy->SetGlobalTransform(PelvisRig, ModifiedTransform);
+
+		OutPelvisTiltRotateAmount = PelvisSideLeanRotateAmount;
+	}
+#pragma endregion
+```
+
+##### 身体跟随脚部的旋转而自旋转
+
+![1774523884042](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260326191917236-1127034094.png)
+
+```cpp
+#pragma region 身体绕着Z轴旋转：跟随脚部的旋转而自旋转
+//身体绕着Z轴旋转：跟随脚部的旋转而自旋转
+USTRUCT(meta = (DisplayName = "PelvisRotateAroundZAxis"), Category = "OffsetPelvis")
+struct PROCEDURALANIM_API FRigUnit_PelvisRotateAroundZAxis : public FRigUnit_DynamicHierarchyBaseMutable
+{
+	GENERATED_BODY()
+
+	RIGVM_METHOD()
+	virtual void Execute() override;
+
+	UPROPERTY(meta = (Input))
+	TArray<FTransform> SavedFootPlatformArray;
+
+	UPROPERTY(meta = (Output))
+	FQuat OutPelvisRotationOffset;
+};
+#pragma endregion
+```
+
+```cpp
+#pragma region 身体绕着Z轴旋转：跟随脚部的旋转而自旋转
+FRigUnit_PelvisRotateAroundZAxis_Execute()
+{
+	URigHierarchy* Hierarchy = ExecuteContext.Hierarchy;
+	if(!Hierarchy)
+	{
+		return;
+	}
+
+	//双脚平均旋转量：绕z轴
+	FQuat FootAverageRotation = FQuat::Slerp(
+		SavedFootPlatformArray[0].GetRotation(),
+		SavedFootPlatformArray[1].GetRotation(),
+		0.5);
+	float FootAverageRotationAroundZAxis = AnimationCore::EulerFromQuat(FootAverageRotation).Z;
+	//盆骨绕着Z轴的旋转量 = 双脚的平均旋转
+	FQuat PelvisRotateAmount = AnimationCore::QuatFromEuler( FVector(0,0,FootAverageRotationAroundZAxis) );
+
+	//盆骨绕着Z轴自旋转
+	FRigElementKey PelvisRig = FRigElementKey(TEXT("pelvis"), ERigElementType::Bone);
+	FTransform TransformToRotate = Hierarchy->GetGlobalTransform(PelvisRig);
+	FVector PointToRotateAround = TransformToRotate.GetTranslation();
+	FTransform ModifiedTransform = RotateAroundPoint(TransformToRotate, PointToRotateAround, PelvisRotateAmount);
+	Hierarchy->SetGlobalTransform(PelvisRig, ModifiedTransform);
+
+	OutPelvisRotationOffset = PelvisRotateAmount;
+}
+#pragma endregion
+```
+
+##### 恢复脚部Transform
+
+![1774519970024](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260326191917686-423668827.png)
+
+#### 腿部IK控制SetFinalLegIK

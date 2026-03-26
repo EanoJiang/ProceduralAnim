@@ -41,29 +41,107 @@ struct PROCEDURALANIM_API FRigUnit_SetupArray : public FRigUnit_DynamicHierarchy
 };
 #pragma endregion
 
-//Pelvis偏移
-USTRUCT(meta = (DisplayName = "OffsetPelvis"))
-struct PROCEDURALANIM_API FRigUnit_OffsetPelvis : public FRigUnit_DynamicHierarchyBaseMutable
+#pragma region 盆骨朝向
+	//盆骨朝向：左脚在前顺时针旋转，右脚在前逆时针旋转
+	USTRUCT(meta = (DisplayName = "CalculatePelvisRotation"), Category = "OffsetPelvis")
+	struct PROCEDURALANIM_API FRigUnit_CalculatePelvisRotation : public FRigUnit
+	{
+		GENERATED_BODY()
+		
+		RIGVM_METHOD()
+		virtual void Execute() override;
+
+		UPROPERTY(meta = (Input))
+		FVector RigSpaceVelocity;
+		
+		UPROPERTY(meta = (Input))
+		TArray<FTransform> SavedFootPlatformArray;
+
+		UPROPERTY(meta = (Input))
+		FQuat MovementAngleOffset;
+		
+		UPROPERTY(meta = (Output))
+		FQuat Result;
+		
+	};
+#pragma endregion
+
+#pragma region 盆骨上下起伏偏移量
+	//盆骨上下起伏偏移量
+	USTRUCT(meta = (DisplayName = "AddPelvisZOffset"), Category = "OffsetPelvis")
+	struct PROCEDURALANIM_API FRigUnit_AddPelvisZOffset : public FRigUnit
+	{
+		GENERATED_BODY()
+		
+		RIGVM_METHOD()
+		virtual void Execute() override;
+
+		UPROPERTY(meta = (Input, Output))
+		FVector Translation;
+		
+		UPROPERTY(meta = (Input))
+		float MasterCyclePercent;
+
+		UPROPERTY(meta = (Input))
+		FVector RigSpaceVelocity;
+
+		UPROPERTY(meta = (Input))
+		float PreviousZTraceOffset;
+	};
+#pragma endregion
+
+#pragma region 身体前后倾斜
+//身体前后倾斜
+USTRUCT(meta = (DisplayName = "PelvisLean"), Category = "OffsetPelvis")
+struct PROCEDURALANIM_API FRigUnit_PelvisLean : public FRigUnit_DynamicHierarchyBaseMutable
 {
 	GENERATED_BODY()
-	
+
 	RIGVM_METHOD()
 	virtual void Execute() override;
 
 	UPROPERTY(meta = (Input))
-	TArray<FRigElementKey> FootArray;
-
-	//OffsetPelvis前的脚部位置数组
-	UPROPERTY(Transient)
-	TArray<FTransform> OriginalFootLocationArray;
-
-	UPROPERTY(meta = (Input))
-	float MasterCyclePercent;
-	
-	UPROPERTY(meta = (Input))
 	FVector RigSpaceVelocity;
-	
+			
 };
+#pragma endregion
+
+#pragma region 盆骨侧倾
+	//盆骨侧倾
+	USTRUCT(meta = (DisplayName = "PelvisSideLean"), Category = "OffsetPelvis")
+	struct PROCEDURALANIM_API FRigUnit_PelvisSideLean : public FRigUnit_DynamicHierarchyBaseMutable
+	{
+		GENERATED_BODY()
+
+		RIGVM_METHOD()
+		virtual void Execute() override;
+
+		UPROPERTY(meta = (Input))
+		TArray<FTransform> SavedFootPlatformArray;
+
+		UPROPERTY(meta = (Output))
+		FQuat OutPelvisTiltRotateAmount;
+	};
+#pragma endregion
+
+#pragma region 身体绕着Z轴旋转：跟随脚部的旋转而自旋转
+//身体绕着Z轴旋转：跟随脚部的旋转而自旋转
+USTRUCT(meta = (DisplayName = "PelvisRotateAroundZAxis"), Category = "OffsetPelvis")
+struct PROCEDURALANIM_API FRigUnit_PelvisRotateAroundZAxis : public FRigUnit_DynamicHierarchyBaseMutable
+{
+	GENERATED_BODY()
+
+	RIGVM_METHOD()
+	virtual void Execute() override;
+
+	UPROPERTY(meta = (Input))
+	TArray<FTransform> SavedFootPlatformArray;
+
+	UPROPERTY(meta = (Output))
+	FQuat OutPelvisRotationOffset;
+};
+#pragma endregion
+
 
 //计算FinalLegIK的主次轴朝向数据
 USTRUCT(meta = (DisplayName = "GetFinalLegIKAxisData"), Category = "FinalLegIK")
@@ -275,21 +353,6 @@ struct PROCEDURALANIM_API FRigUnit_GetClavicleZOffset : public FRigUnit
 	FTransform RotateAroundPoint(FTransform TransformToRotate, FVector PointToRotateAround, FQuat RotateAmount);
 #pragma endregion
 
-#pragma region 身体前后倾斜
-//身体前后倾斜
-USTRUCT(meta = (DisplayName = "PelvisLean"), Category = "OffsetPelvis")
-struct PROCEDURALANIM_API FRigUnit_PelvisLean : public FRigUnit_DynamicHierarchyBaseMutable
-{
-	GENERATED_BODY()
-
-	RIGVM_METHOD()
-	virtual void Execute() override;
-
-	UPROPERTY(meta = (Input))
-	FVector RigSpaceVelocity;
-			
-};
-#pragma endregion
 
 #pragma region 计算每个脚的RotationFactor
 //计算每个脚的RotationFactor
