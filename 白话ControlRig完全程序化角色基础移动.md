@@ -1,5 +1,11 @@
 # 白话ControlRig完全程序化角色基础移动
 
+> 视频演示：[【UE5】完全程序化的角色基础移动控制器_哔哩哔哩_bilibili](https://www.bilibili.com/video/BV11mQRB8Ez5/?vd_source=5eb26c403edb4b6de737a9c6fad9b1de#reply116277381238713)
+>
+> 详细教程：[[UE5]完全程序化的角色基础移动控制器 - EanoJiang - 博客园](https://www.cnblogs.com/eanojiang/p/19623752)
+>
+> [白话ControlRig完全程序化角色基础移动 - EanoJiang - 博客园](https://www.cnblogs.com/eanojiang/p/19759397)
+
 ## 初始化要用到的数组
 
 ![1774252443658](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260323175904125-300876890.png)
@@ -36,13 +42,13 @@ struct PROCEDURALANIM_API FRigUnit_SetupArray : public FRigUnit_DynamicHierarchy
 	TArray<FRigElementKey> HandArray;
 
 	UPROPERTY(meta=(Output))
-	TArray<FVector> DefaultFeetPoleVectorArray;
+	TArray<FVector> DefaultKneeVectorArray;
 };
 #pragma endregion
 ```
 
 ```cpp
-#pragma region SetupArray
+#pragma region 初始化Array
 FRigUnit_SetupArray_Execute()
 {
 	DECLARE_SCOPE_HIERARCHICAL_COUNTER_RIGUNIT()
@@ -61,7 +67,7 @@ FRigUnit_SetupArray_Execute()
 	PerFootCyclePercentArray.Reset();
 	SavedFootPlatformArray.Reset();
 	HandArray.Reset();
-	DefaultFeetPoleVectorArray.Reset();
+	DefaultKneeVectorArray.Reset();
 
 	const FRigElementKey RootBoneKey(TEXT("root"), ERigElementType::Bone);
 	if (!Hierarchy->Contains(RootBoneKey))
@@ -80,7 +86,7 @@ FRigUnit_SetupArray_Execute()
 		if (BoneNameStr.Contains(TEXT("foot"), ESearchCase::IgnoreCase) && !BoneNameStr.Contains(TEXT("ik"), ESearchCase::IgnoreCase))
 		{
 			FootArray.Add(ChildKey);
-
+	
 			FVector LockedFootLocationElementTranslation = Hierarchy->GetGlobalTransform(ChildKey).GetTranslation() + FVector(0.0f, 0.0f, -13.5f);
 			FTransform LockedFootLocationElement;
 			LockedFootLocationElement.SetTranslation(LockedFootLocationElementTranslation);
@@ -89,12 +95,12 @@ FRigUnit_SetupArray_Execute()
 			IsFootLockedArray.Add(false);
 
 			PredictFeetLocationArray.Add(FTransform());
-
+	
 			PerFootCyclePercentArray.Add(0);
 
 			SavedFootPlatformArray.Add(FTransform());
 
-			DefaultFeetPoleVectorArray.Add(FVector());
+			DefaultKneeVectorArray.Add(FVector());
 		}
 		else if (BoneNameStr.Contains(TEXT("hand"), ESearchCase::IgnoreCase) && !BoneNameStr.Contains(TEXT("ik"), ESearchCase::IgnoreCase))
 		{
@@ -103,7 +109,6 @@ FRigUnit_SetupArray_Execute()
 	}
 }
 #pragma endregion
-
 ```
 
 ## 骨骼控制链全流程
@@ -361,11 +366,11 @@ FootRotationFactor = CalculatePerFootRotationFactor(MovementAngleOffset,FootInde
 > #pragma endregion
 > ```
 
-##### 保存脚默认的极坐标矢量数组DefaultFeetPoleVectorArray
+##### 保存默认的膝盖朝向向量(脚的极坐标向量)数组SaveDefaultKneeVectorArray
 
-DefaultFeetPoleVectorArray[FootIndex] = 膝盖位置
+DefaultKneeVectorArray[FootIndex] = 膝盖朝向向量
 
-膝盖位置 = 小腿Calf - 大腿Thigh与脚部Foot的中点
+膝盖朝向向量 = 小腿Calf - 大腿Thigh与脚部Foot的中点
 
 ##### 最主要的功能函数节点——RotateAroundPoint
 
@@ -1266,7 +1271,7 @@ struct PROCEDURALANIM_API FRigUnit_PelvisLean : public FRigUnit_DynamicHierarchy
 
 	UPROPERTY(meta = (Input))
 	FVector RigSpaceVelocity;
-	
+
 };
 #pragma endregion
 ```
@@ -1448,3 +1453,185 @@ FRigUnit_PelvisRotateAroundZAxis_Execute()
 ![1774519970024](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260326191917686-423668827.png)
 
 #### 腿部IK控制SetFinalLegIK
+
+##### Rig引用
+
+![1774584978310](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260327163513535-1552681184.png)
+
+##### FootEffector
+
+![1774598087636](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260327163514346-1954019163.png)
+
+> CalculateFootEffector函数节点
+
+```cpp
+#pragma region 计算FootEffector
+	//计算FootEffector
+	USTRUCT(meta = (DisplayName = "CalculateFootEffector"), Category = "ArmMotion")
+	struct PROCEDURALANIM_API FRigUnit_CalculateFootEffector : public FRigUnit
+	{
+		GENERATED_BODY()
+
+		RIGVM_METHOD()
+		virtual void Execute() override;
+
+		UPROPERTY(meta = (Input))
+		FRigElementKey FootRig;
+
+		UPROPERTY(meta = (Input))
+		FRigElementKey CalfRig;
+
+		UPROPERTY(meta = (Input))
+		FRigElementKey ThighRig;
+
+		UPROPERTY(meta = (Output))
+		FTransform OutFootEffector;
+	};
+#pragma endregion
+```
+
+```cpp
+#pragma region 计算FootEffector
+	FRigUnit_CalculateFootEffector_Execute()
+	{
+		URigHierarchy* Hierarchy = ExecuteContext.Hierarchy;
+
+		if(!Hierarchy)
+		{
+			return;
+		}
+
+		FTransform Foot = Hierarchy->GetGlobalTransform(FootRig);
+		FTransform Calf = Hierarchy->GetGlobalTransform(CalfRig);
+		FTransform Thigh = Hierarchy->GetGlobalTransform(ThighRig);
+		FTransform InitialFoot = Hierarchy->GetGlobalTransform(FootRig,true);
+		FTransform InitialCalf = Hierarchy->GetGlobalTransform(CalfRig,true);
+		FTransform InitialThigh = Hierarchy->GetGlobalTransform(ThighRig,true);
+
+		//把脚部能到达的范围限制在一个球体
+		//球心：大腿
+		//半径：ClampMaximum = 0.99 × 整条腿的长度(计算时用初始的骨骼位置)
+		float DistanceBetweenFootCalf = static_cast<float>(FVector::Distance(InitialFoot.GetTranslation(), InitialCalf.GetTranslation()));
+		float DistanceBetweenCalfThigh = static_cast<float>(FVector::Distance(InitialCalf.GetTranslation(), InitialThigh.GetTranslation()));
+		float ClampMaximum = 0.99 * ( DistanceBetweenFootCalf + DistanceBetweenCalfThigh );
+
+		OutFootEffector.SetTranslation(
+			FRigVMMathLibrary::ClampSpatially(
+				Foot.GetTranslation(),
+				EAxis::X,
+				ERigVMClampSpatialMode::Sphere,
+				0,
+				ClampMaximum,
+				Hierarchy->GetGlobalTransform(ThighRig)
+			)
+		);
+		OutFootEffector.SetRotation( Foot.GetRotation() );
+		OutFootEffector.SetScale3D( Foot.GetScale3D() );
+	}
+#pragma endregion
+```
+
+##### 基于移动角度偏移的膝盖朝向向量KneeVector
+
+> 关于RotateVector节点
+>
+> `A.RotateVector(B)` ：用旋转A旋转向量B，也就是向量B 按旋转 `A` 变换
+
+![1774599510581](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260327163514792-177567963.png)
+
+```cpp
+#pragma region 计算基于移动角度偏移的膝盖朝向向量KneeVector
+	//计算基于移动角度偏移的膝盖朝向向量KneeVector
+	USTRUCT(meta = (DisplayName = "CalculateKneeVector"), Category = "ArmMotion")
+	struct PROCEDURALANIM_API FRigUnit_CalculateKneeVector : public FRigUnit
+	{
+		GENERATED_BODY()
+
+		RIGVM_METHOD()
+		virtual void Execute() override;
+
+		UPROPERTY(meta = (Input))
+		TArray<FTransform> SavedFootPlatformArray;
+
+		UPROPERTY(meta = (Input))
+		int FootIndex;
+
+		UPROPERTY(meta = (Input))
+		FQuat MovementAngleOffset;
+
+		UPROPERTY(meta = (Input))
+		TArray<FVector> DefaultKneeVectorArray;
+
+		UPROPERTY(meta = (Output))
+		FVector OutKneeVector;
+	};
+#pragma endregion
+```
+
+```cpp
+#pragma region 计算基于移动角度偏移的膝盖朝向向量KneeVector
+	FRigUnit_CalculateKneeVector_Execute()
+	{
+		//膝盖朝向向量 = 默认的膝盖朝向向量 按照 脚部移动朝向的旋转 变换
+		FQuat FootMovementRotation = FQuat::Slerp(SavedFootPlatformArray[FootIndex].GetRotation(), MovementAngleOffset, 0.25);
+		OutKneeVector = FootMovementRotation.RotateVector(DefaultKneeVectorArray[FootIndex] * 20);
+	}
+#pragma endregion
+```
+
+##### BasicIK
+
+![1774599609818](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260327163515296-827611803.png)
+
+> 计算FinalLegIK的主次轴朝向数据CalculateFinalLegIKAxisData函数节点：
+
+```cpp
+#pragma region 计算ArmMotion的主次轴朝向数据
+	//计算ArmMotion的主次轴朝向数据
+	USTRUCT(meta = (DisplayName = "GetArmMotionAxisData"), Category = "ArmMotion")
+	struct PROCEDURALANIM_API FRigUnit_GetArmMotionAxisData : public FRigUnit
+	{
+		GENERATED_BODY()
+
+		RIGVM_METHOD()
+		virtual void Execute() override;
+
+		UPROPERTY(meta = (Input))
+		int ArmIndex = 0;
+
+		UPROPERTY(meta = (Output))
+		FVector PrimaryAxis = FVector(1, 0, 0) ;
+
+		UPROPERTY(meta = (Output))
+		FVector SecondaryAxis = FVector(0, -1, 0);
+	};
+#pragma endregion
+```
+
+```cpp
+#pragma region 计算FinalLegIK的主次轴朝向数据
+	FRigUnit_CalculateFinalLegIKAxisData_Execute()
+	{
+		//右脚的骨骼朝向是反的，因此Index不为0时需要乘以的是-1
+		const float Sign = (LegIndex == 0) ? 1.0f : -1.0f;
+		PrimaryAxis = FVector(-1, 0, 0) * Sign;
+		SecondaryAxis = FVector(0, 1, 0) * Sign;
+	}
+#pragma endregion
+```
+
+##### 脚部在处于Swing阶段时，保持原旋转信息KeeoOriginalRotation
+
+![1774599744007](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260327163515739-1387090305.png)
+
+###### <1：处于Swing阶段，这一阶段映射为平滑的曲线
+
+> 越靠近Swing的中间阶段(也就是脚部摆动到身体正下方)权重越高
+
+![1774600234927](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260327163516180-1783767002.png)
+
+###### 按照权重赋值给脚部以原始的旋转信息
+
+> 额外需要考虑的速度因素：速度=0时，该操作的权重为0
+
+![1774600352774](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260327163516689-576117921.png)

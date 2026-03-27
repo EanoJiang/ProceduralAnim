@@ -1,5 +1,13 @@
 # 程序化Locomoition角色控制器
 
+> git仓库：[GitHub - EanoJiang/ProceduralAnim: 完全程序化Locomotion · GitHub](https://github.com/EanoJiang/ProceduralAnim)
+>
+> 视频演示：[【UE5】完全程序化的角色基础移动控制器_哔哩哔哩_bilibili](https://www.bilibili.com/video/BV11mQRB8Ez5/?vd_source=5eb26c403edb4b6de737a9c6fad9b1de#reply116277381238713)
+>
+> Debug调试显示：
+>
+> ![1774600728384](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260327163902922-1393596440.png)
+
 ## 第一个程序动画
 
 创建一个control rig

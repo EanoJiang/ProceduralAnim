@@ -11,66 +11,66 @@
 #include "Transform/TransformableHandleUtils.h"
 #include "Units/Deprecated/Math/RigUnit_Float.h"
 
-#pragma region SetupArray
-FRigUnit_SetupArray_Execute()
-{
-	DECLARE_SCOPE_HIERARCHICAL_COUNTER_RIGUNIT()
-	
-	URigHierarchy* Hierarchy = ExecuteContext.Hierarchy;
-	
-	if(!Hierarchy)
+#pragma region 初始化Array
+	FRigUnit_SetupArray_Execute()
 	{
-		return;
-	}
-	
-	FootArray.Reset();
-	LockedFootLocationArray.Reset();
-	IsFootLockedArray.Reset();
-	PredictFeetLocationArray.Reset();
-	PerFootCyclePercentArray.Reset();
-	SavedFootPlatformArray.Reset();
-	HandArray.Reset();
-	DefaultFeetPoleVectorArray.Reset();
-
-	const FRigElementKey RootBoneKey(TEXT("root"), ERigElementType::Bone);
-	if (!Hierarchy->Contains(RootBoneKey))
-	{
-		return;
-	}
-
-	for (const FRigElementKey& ChildKey : Hierarchy->GetChildren(RootBoneKey, true))
-	{
-		if (ChildKey.Type != ERigElementType::Bone)
-		{
-			continue;
-		}
-		const FString BoneNameStr = ChildKey.Name.ToString();
+		DECLARE_SCOPE_HIERARCHICAL_COUNTER_RIGUNIT()
 		
-		if (BoneNameStr.Contains(TEXT("foot"), ESearchCase::IgnoreCase) && !BoneNameStr.Contains(TEXT("ik"), ESearchCase::IgnoreCase))
+		URigHierarchy* Hierarchy = ExecuteContext.Hierarchy;
+		
+		if(!Hierarchy)
 		{
-			FootArray.Add(ChildKey);
-			
-			FVector LockedFootLocationElementTranslation = Hierarchy->GetGlobalTransform(ChildKey).GetTranslation() + FVector(0.0f, 0.0f, -13.5f);
-			FTransform LockedFootLocationElement;
-			LockedFootLocationElement.SetTranslation(LockedFootLocationElementTranslation);
-			LockedFootLocationArray.Add(LockedFootLocationElement);
-
-			IsFootLockedArray.Add(false);
-
-			PredictFeetLocationArray.Add(FTransform());
-			
-			PerFootCyclePercentArray.Add(0);
-
-			SavedFootPlatformArray.Add(FTransform());
-
-			DefaultFeetPoleVectorArray.Add(FVector());
+			return;
 		}
-		else if (BoneNameStr.Contains(TEXT("hand"), ESearchCase::IgnoreCase) && !BoneNameStr.Contains(TEXT("ik"), ESearchCase::IgnoreCase))
+		
+		FootArray.Reset();
+		LockedFootLocationArray.Reset();
+		IsFootLockedArray.Reset();
+		PredictFeetLocationArray.Reset();
+		PerFootCyclePercentArray.Reset();
+		SavedFootPlatformArray.Reset();
+		HandArray.Reset();
+		DefaultKneeVectorArray.Reset();
+
+		const FRigElementKey RootBoneKey(TEXT("root"), ERigElementType::Bone);
+		if (!Hierarchy->Contains(RootBoneKey))
 		{
-			HandArray.Add(ChildKey);
+			return;
+		}
+
+		for (const FRigElementKey& ChildKey : Hierarchy->GetChildren(RootBoneKey, true))
+		{
+			if (ChildKey.Type != ERigElementType::Bone)
+			{
+				continue;
+			}
+			const FString BoneNameStr = ChildKey.Name.ToString();
+			
+			if (BoneNameStr.Contains(TEXT("foot"), ESearchCase::IgnoreCase) && !BoneNameStr.Contains(TEXT("ik"), ESearchCase::IgnoreCase))
+			{
+				FootArray.Add(ChildKey);
+				
+				FVector LockedFootLocationElementTranslation = Hierarchy->GetGlobalTransform(ChildKey).GetTranslation() + FVector(0.0f, 0.0f, -13.5f);
+				FTransform LockedFootLocationElement;
+				LockedFootLocationElement.SetTranslation(LockedFootLocationElementTranslation);
+				LockedFootLocationArray.Add(LockedFootLocationElement);
+
+				IsFootLockedArray.Add(false);
+
+				PredictFeetLocationArray.Add(FTransform());
+				
+				PerFootCyclePercentArray.Add(0);
+
+				SavedFootPlatformArray.Add(FTransform());
+
+				DefaultKneeVectorArray.Add(FVector());
+			}
+			else if (BoneNameStr.Contains(TEXT("hand"), ESearchCase::IgnoreCase) && !BoneNameStr.Contains(TEXT("ik"), ESearchCase::IgnoreCase))
+			{
+				HandArray.Add(ChildKey);
+			}
 		}
 	}
-}
 #pragma endregion
 
 #pragma region 盆骨朝向
@@ -199,42 +199,91 @@ FRigUnit_SetupArray_Execute()
 #pragma endregion
 
 #pragma region 身体绕着Z轴旋转：跟随脚部的旋转而自旋转
-FRigUnit_PelvisRotateAroundZAxis_Execute()
-{
-	URigHierarchy* Hierarchy = ExecuteContext.Hierarchy;
-	if(!Hierarchy)
+	FRigUnit_PelvisRotateAroundZAxis_Execute()
 	{
-		return;
-	}
-	
-	//双脚平均旋转量：绕z轴
-	FQuat FootAverageRotation = FQuat::Slerp(
-		SavedFootPlatformArray[0].GetRotation(),
-		SavedFootPlatformArray[1].GetRotation(),
-		0.5);
-	float FootAverageRotationAroundZAxis = AnimationCore::EulerFromQuat(FootAverageRotation).Z;
-	//盆骨绕着Z轴的旋转量 = 双脚的平均旋转
-	FQuat PelvisRotateAmount = AnimationCore::QuatFromEuler( FVector(0,0,FootAverageRotationAroundZAxis) );
-	
-	//盆骨绕着Z轴自旋转
-	FRigElementKey PelvisRig = FRigElementKey(TEXT("pelvis"), ERigElementType::Bone);
-	FTransform TransformToRotate = Hierarchy->GetGlobalTransform(PelvisRig);
-	FVector PointToRotateAround = TransformToRotate.GetTranslation();
-	FTransform ModifiedTransform = RotateAroundPoint(TransformToRotate, PointToRotateAround, PelvisRotateAmount);
-	Hierarchy->SetGlobalTransform(PelvisRig, ModifiedTransform);
+		URigHierarchy* Hierarchy = ExecuteContext.Hierarchy;
+		if(!Hierarchy)
+		{
+			return;
+		}
+		
+		//双脚平均旋转量：绕z轴
+		FQuat FootAverageRotation = FQuat::Slerp(
+			SavedFootPlatformArray[0].GetRotation(),
+			SavedFootPlatformArray[1].GetRotation(),
+			0.5);
+		float FootAverageRotationAroundZAxis = AnimationCore::EulerFromQuat(FootAverageRotation).Z;
+		//盆骨绕着Z轴的旋转量 = 双脚的平均旋转
+		FQuat PelvisRotateAmount = AnimationCore::QuatFromEuler( FVector(0,0,FootAverageRotationAroundZAxis) );
+		
+		//盆骨绕着Z轴自旋转
+		FRigElementKey PelvisRig = FRigElementKey(TEXT("pelvis"), ERigElementType::Bone);
+		FTransform TransformToRotate = Hierarchy->GetGlobalTransform(PelvisRig);
+		FVector PointToRotateAround = TransformToRotate.GetTranslation();
+		FTransform ModifiedTransform = RotateAroundPoint(TransformToRotate, PointToRotateAround, PelvisRotateAmount);
+		Hierarchy->SetGlobalTransform(PelvisRig, ModifiedTransform);
 
-	OutPelvisRotationOffset = PelvisRotateAmount;
-}
+		OutPelvisRotationOffset = PelvisRotateAmount;
+	}
 #pragma endregion
 
-FRigUnit_GetFinalLegIKAxisData_Execute()
-{
-	//右脚的骨骼朝向是反的，因此Index不为0时需要乘以的是-1
-	const float Sign = (LegIndex == 0) ? 1.0f : -1.0f;
-	PrimaryAxis = FVector(-1, 0, 0) * Sign;
-	SecondaryAxis = FVector(0, 1, 0) * Sign;
-}
+#pragma region 计算FootEffector
+	FRigUnit_CalculateFootEffector_Execute()
+	{
+		URigHierarchy* Hierarchy = ExecuteContext.Hierarchy;
+	
+		if(!Hierarchy)
+		{
+			return;
+		}
+	
+		FTransform Foot = Hierarchy->GetGlobalTransform(FootRig);
+		FTransform Calf = Hierarchy->GetGlobalTransform(CalfRig);
+		FTransform Thigh = Hierarchy->GetGlobalTransform(ThighRig);
+		FTransform InitialFoot = Hierarchy->GetGlobalTransform(FootRig,true);
+		FTransform InitialCalf = Hierarchy->GetGlobalTransform(CalfRig,true);
+		FTransform InitialThigh = Hierarchy->GetGlobalTransform(ThighRig,true);
 
+		//把脚部能到达的范围限制在一个球体
+		//球心：大腿
+		//半径：ClampMaximum = 0.99 × 整条腿的长度(计算时用初始的骨骼位置)
+		float DistanceBetweenFootCalf = static_cast<float>(FVector::Distance(InitialFoot.GetTranslation(), InitialCalf.GetTranslation()));
+		float DistanceBetweenCalfThigh = static_cast<float>(FVector::Distance(InitialCalf.GetTranslation(), InitialThigh.GetTranslation()));
+		float ClampMaximum = 0.99 * ( DistanceBetweenFootCalf + DistanceBetweenCalfThigh );
+
+		OutFootEffector.SetTranslation(
+			FRigVMMathLibrary::ClampSpatially(
+				Foot.GetTranslation(),
+				EAxis::X,
+				ERigVMClampSpatialMode::Sphere,
+				0,
+				ClampMaximum,
+				Hierarchy->GetGlobalTransform(ThighRig)
+			)
+		);
+		OutFootEffector.SetRotation( Foot.GetRotation() );
+		OutFootEffector.SetScale3D( Foot.GetScale3D() );
+	}
+#pragma endregion
+
+#pragma region 计算基于移动角度偏移的膝盖朝向向量KneeVector
+	FRigUnit_CalculateKneeVector_Execute()
+	{
+		//膝盖朝向向量 = 默认的膝盖朝向向量 按照 脚部移动朝向的旋转 变换
+		FQuat FootMovementRotation = FQuat::Slerp(SavedFootPlatformArray[FootIndex].GetRotation(), MovementAngleOffset, 0.25);
+		OutKneeVector = FootMovementRotation.RotateVector(DefaultKneeVectorArray[FootIndex] * 20);
+	}
+#pragma endregion
+
+#pragma region 计算FinalLegIK的主次轴朝向数据
+	FRigUnit_CalculateFinalLegIKAxisData_Execute()
+	{
+		//右脚的骨骼朝向是反的，因此Index不为0时需要乘以的是-1
+		const float Sign = (LegIndex == 0) ? 1.0f : -1.0f;
+		PrimaryAxis = FVector(-1, 0, 0) * Sign;
+		SecondaryAxis = FVector(0, 1, 0) * Sign;
+	}
+#pragma endregion
 
 #pragma region 计算移动角度偏移
 	FRigUnit_GetMovementAngleOffset_Execute()

@@ -1,10 +1,12 @@
-![1772703106545](file:///E:/UE_Projects/ProceduralAnim/image/%5BUE5%5D%E5%AE%8C%E5%85%A8%E7%A8%8B%E5%BA%8F%E5%8C%96%E7%9A%84%E8%A7%92%E8%89%B2%E5%9F%BA%E7%A1%80%E7%A7%BB%E5%8A%A8%E6%8E%A7%E5%88%B6%E5%99%A8/1772703106545.png?lastModify=1772703649)
+## 基本流程
+
+![1774598530978](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260327160432721-994329303.png)
 
 逻辑代码迁移到C++自定义ControlRig节点：
 
 需要.Build中添加编译要用到的模块AnimationCore
 
-![1772703564402](file:///E:/UE_Projects/ProceduralAnim/image/%5BUE5%5D%E5%AE%8C%E5%85%A8%E7%A8%8B%E5%BA%8F%E5%8C%96%E7%9A%84%E8%A7%92%E8%89%B2%E5%9F%BA%E7%A1%80%E7%A7%BB%E5%8A%A8%E6%8E%A7%E5%88%B6%E5%99%A8/1772703564402.png?lastModify=1772703649)
+![1774598536172](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260327160433289-1932975330.png)
 
 RigUnit_ProceduralCharacter.h
 
@@ -21,7 +23,7 @@ RigUnit_ProceduralCharacter.h
 
         UPROPERTY(meta = (Input))
         FVector RigSpaceVelocity;
-    
+  
         UPROPERTY(meta = (Output))
         float FootTargetZAngle;
 
@@ -68,4 +70,14 @@ RigUnit_ProceduralCharacter.cpp
 #pragma endregion
 ```
 
-![1772703209005](file:///E:/UE_Projects/ProceduralAnim/image/%5BUE5%5D%E5%AE%8C%E5%85%A8%E7%A8%8B%E5%BA%8F%E5%8C%96%E7%9A%84%E8%A7%92%E8%89%B2%E5%9F%BA%E7%A1%80%E7%A7%BB%E5%8A%A8%E6%8E%A7%E5%88%B6%E5%99%A8/1772703209005.png?lastModify=1772703649)
+![1774598542118](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260305232647459-86592147.png)
+
+## 对于一些蓝图和实际C++API名字不一致的节点
+
+搜DisplayName="蓝图节点名"找对应的C++API
+
+> 比如：Interpolate节点
+>
+> ![1774598644513](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260327160434153-594007449.png)
+>
+> ![1774598764221](https://img2024.cnblogs.com/blog/3614909/202603/3614909-20260327160614137-1638330505.png)

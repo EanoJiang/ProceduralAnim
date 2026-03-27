@@ -7,38 +7,39 @@
 #include "RigUnit_ProceduralCharacter.generated.h"
 
 #pragma region 初始化Array
-USTRUCT(meta = (DisplayName = "SetupArray"), Category = "ConstructionEvent")
-struct PROCEDURALANIM_API FRigUnit_SetupArray : public FRigUnit_DynamicHierarchyBaseMutable
-{
-	GENERATED_BODY()
-	
-	RIGVM_METHOD()
-	virtual void Execute() override;
+	//初始化Array
+	USTRUCT(meta = (DisplayName = "SetupArray"), Category = "ConstructionEvent")
+	struct PROCEDURALANIM_API FRigUnit_SetupArray : public FRigUnit_DynamicHierarchyBaseMutable
+	{
+		GENERATED_BODY()
+		
+		RIGVM_METHOD()
+		virtual void Execute() override;
 
-	UPROPERTY(meta=(Output))
-	TArray<FRigElementKey> FootArray;
-	
-	UPROPERTY(meta=(Output))
-	TArray<FTransform> LockedFootLocationArray;
+		UPROPERTY(meta=(Output))
+		TArray<FRigElementKey> FootArray;
+		
+		UPROPERTY(meta=(Output))
+		TArray<FTransform> LockedFootLocationArray;
 
-	UPROPERTY(meta=(Output))
-	TArray<bool> IsFootLockedArray;
+		UPROPERTY(meta=(Output))
+		TArray<bool> IsFootLockedArray;
 
-	UPROPERTY(meta=(Output))
-	TArray<FTransform> PredictFeetLocationArray;
+		UPROPERTY(meta=(Output))
+		TArray<FTransform> PredictFeetLocationArray;
 
-	UPROPERTY(meta=(Output))
-	TArray<float> PerFootCyclePercentArray;
+		UPROPERTY(meta=(Output))
+		TArray<float> PerFootCyclePercentArray;
 
-	UPROPERTY(meta=(Output))
-	TArray<FTransform> SavedFootPlatformArray;
+		UPROPERTY(meta=(Output))
+		TArray<FTransform> SavedFootPlatformArray;
 
-	UPROPERTY(meta=(Output))
-	TArray<FRigElementKey> HandArray;
+		UPROPERTY(meta=(Output))
+		TArray<FRigElementKey> HandArray;
 
-	UPROPERTY(meta=(Output))
-	TArray<FVector> DefaultFeetPoleVectorArray;
-};
+		UPROPERTY(meta=(Output))
+		TArray<FVector> DefaultKneeVectorArray;
+	};
 #pragma endregion
 
 #pragma region 盆骨朝向
@@ -91,19 +92,19 @@ struct PROCEDURALANIM_API FRigUnit_SetupArray : public FRigUnit_DynamicHierarchy
 #pragma endregion
 
 #pragma region 身体前后倾斜
-//身体前后倾斜
-USTRUCT(meta = (DisplayName = "PelvisLean"), Category = "OffsetPelvis")
-struct PROCEDURALANIM_API FRigUnit_PelvisLean : public FRigUnit_DynamicHierarchyBaseMutable
-{
-	GENERATED_BODY()
+	//身体前后倾斜
+	USTRUCT(meta = (DisplayName = "PelvisLean"), Category = "OffsetPelvis")
+	struct PROCEDURALANIM_API FRigUnit_PelvisLean : public FRigUnit_DynamicHierarchyBaseMutable
+	{
+		GENERATED_BODY()
 
-	RIGVM_METHOD()
-	virtual void Execute() override;
+		RIGVM_METHOD()
+		virtual void Execute() override;
 
-	UPROPERTY(meta = (Input))
-	FVector RigSpaceVelocity;
-			
-};
+		UPROPERTY(meta = (Input))
+		FVector RigSpaceVelocity;
+				
+	};
 #pragma endregion
 
 #pragma region 盆骨侧倾
@@ -125,51 +126,50 @@ struct PROCEDURALANIM_API FRigUnit_PelvisLean : public FRigUnit_DynamicHierarchy
 #pragma endregion
 
 #pragma region 身体绕着Z轴旋转：跟随脚部的旋转而自旋转
-//身体绕着Z轴旋转：跟随脚部的旋转而自旋转
-USTRUCT(meta = (DisplayName = "PelvisRotateAroundZAxis"), Category = "OffsetPelvis")
-struct PROCEDURALANIM_API FRigUnit_PelvisRotateAroundZAxis : public FRigUnit_DynamicHierarchyBaseMutable
-{
-	GENERATED_BODY()
+	//身体绕着Z轴旋转：跟随脚部的旋转而自旋转
+	USTRUCT(meta = (DisplayName = "PelvisRotateAroundZAxis"), Category = "OffsetPelvis")
+	struct PROCEDURALANIM_API FRigUnit_PelvisRotateAroundZAxis : public FRigUnit_DynamicHierarchyBaseMutable
+	{
+		GENERATED_BODY()
 
-	RIGVM_METHOD()
-	virtual void Execute() override;
+		RIGVM_METHOD()
+		virtual void Execute() override;
 
-	UPROPERTY(meta = (Input))
-	TArray<FTransform> SavedFootPlatformArray;
+		UPROPERTY(meta = (Input))
+		TArray<FTransform> SavedFootPlatformArray;
 
-	UPROPERTY(meta = (Output))
-	FQuat OutPelvisRotationOffset;
-};
+		UPROPERTY(meta = (Output))
+		FQuat OutPelvisRotationOffset;
+	};
 #pragma endregion
 
+#pragma region 计算FinalLegIK的主次轴朝向数据
+	//计算FinalLegIK的主次轴朝向数据
+	USTRUCT(meta = (DisplayName = "CalculateFinalLegIKAxisData"), Category = "FinalLegIK")
+	struct PROCEDURALANIM_API FRigUnit_CalculateFinalLegIKAxisData : public FRigUnit
+	{
+		GENERATED_BODY()
 
-//计算FinalLegIK的主次轴朝向数据
-USTRUCT(meta = (DisplayName = "GetFinalLegIKAxisData"), Category = "FinalLegIK")
-struct PROCEDURALANIM_API FRigUnit_GetFinalLegIKAxisData : public FRigUnit
-{
-	GENERATED_BODY()
+		RIGVM_METHOD()
+		virtual void Execute() override;
 
-	RIGVM_METHOD()
-	virtual void Execute() override;
-
-	UPROPERTY(meta = (Input))
-	int LegIndex = 0;
-	UPROPERTY(meta = (Output))
-	FVector PrimaryAxis = FVector(-1, 0, 0) ;
-	UPROPERTY(meta = (Output))
-	FVector SecondaryAxis = FVector(0, 1, 0);
-};
-
-
-//手动封装的用于Transform的Lerp函数
-static FTransform InterpolateTransform(const FTransform& A, const FTransform& B, float Alpha)
-{
-	FVector InterpLocation = FMath::Lerp(A.GetLocation(), B.GetLocation(), Alpha);
-	FQuat InterpRotation = FQuat::Slerp(A.GetRotation(), B.GetRotation(), Alpha);
-	FVector InterpScale = FMath::Lerp(A.GetScale3D(), B.GetScale3D(), Alpha);
- 
-	return FTransform(InterpRotation, InterpLocation, InterpScale);
-}
+		UPROPERTY(meta = (Input))
+		int LegIndex = 0;
+		UPROPERTY(meta = (Output))
+		FVector PrimaryAxis = FVector(-1, 0, 0) ;
+		UPROPERTY(meta = (Output))
+		FVector SecondaryAxis = FVector(0, 1, 0);
+	};
+	//手动封装的用于Transform的Lerp函数
+	static FTransform InterpolateTransform(const FTransform& A, const FTransform& B, float Alpha)
+	{
+		FVector InterpLocation = FMath::Lerp(A.GetLocation(), B.GetLocation(), Alpha);
+		FQuat InterpRotation = FQuat::Slerp(A.GetRotation(), B.GetRotation(), Alpha);
+		FVector InterpScale = FMath::Lerp(A.GetScale3D(), B.GetScale3D(), Alpha);
+	 
+		return FTransform(InterpRotation, InterpLocation, InterpScale);
+	}
+#pragma endregion
 
 #pragma region 计算移动角度偏移
 	//计算移动角度偏移
@@ -227,6 +227,56 @@ static FTransform InterpolateTransform(const FTransform& A, const FTransform& B,
 
 #pragma endregion
 
+#pragma region 计算FootEffector
+	//计算FootEffector
+	USTRUCT(meta = (DisplayName = "CalculateFootEffector"), Category = "ArmMotion")
+	struct PROCEDURALANIM_API FRigUnit_CalculateFootEffector : public FRigUnit
+	{
+		GENERATED_BODY()
+
+		RIGVM_METHOD()
+		virtual void Execute() override;
+
+		UPROPERTY(meta = (Input))
+		FRigElementKey FootRig;
+
+		UPROPERTY(meta = (Input))
+		FRigElementKey CalfRig;
+
+		UPROPERTY(meta = (Input))
+		FRigElementKey ThighRig;
+
+		UPROPERTY(meta = (Output))
+		FTransform OutFootEffector;
+	};
+#pragma endregion
+
+#pragma region 计算基于移动角度偏移的膝盖朝向向量KneeVector
+	//计算基于移动角度偏移的膝盖朝向向量KneeVector
+	USTRUCT(meta = (DisplayName = "CalculateKneeVector"), Category = "ArmMotion")
+	struct PROCEDURALANIM_API FRigUnit_CalculateKneeVector : public FRigUnit
+	{
+		GENERATED_BODY()
+
+		RIGVM_METHOD()
+		virtual void Execute() override;
+
+		UPROPERTY(meta = (Input))
+		TArray<FTransform> SavedFootPlatformArray;
+		
+		UPROPERTY(meta = (Input))
+		int FootIndex;
+
+		UPROPERTY(meta = (Input))
+		FQuat MovementAngleOffset;
+
+		UPROPERTY(meta = (Input))
+		TArray<FVector> DefaultKneeVectorArray;
+
+		UPROPERTY(meta = (Output))
+		FVector OutKneeVector;
+	};
+#pragma endregion
 
 #pragma region 计算ArmMotion的主次轴朝向数据
 	//计算ArmMotion的主次轴朝向数据
